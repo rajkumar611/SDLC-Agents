@@ -158,6 +158,9 @@ body {
   cursor: pointer; font-weight: 500; transition: background 0.15s;
 }
 .action-btn:hover { background: rgba(255,255,255,0.3); }
+.export-btn { background: rgba(255,255,255,0.28) !important; font-weight: 700; letter-spacing: 0.01em; }
+.export-btn:hover { background: rgba(255,255,255,0.42) !important; }
+.export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* ── Summary strip ───────────────────────────────────── */
 .summary-strip {

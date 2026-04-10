@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Message } from '../App';
+import { generatePDF } from '../utils/generatePDF';
 
 type AcceptanceCriteria = {
   given: string;
@@ -127,6 +128,7 @@ function RequirementCard({ req, index }: { req: Requirement; index: number }) {
 export default function MessageBubble({ role, content, injectionWarning, timestamp, fileName }: Message) {
   const [showRaw, setShowRaw] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const parsed = role === 'agent' ? tryParseJson(content) : null;
 
@@ -137,6 +139,16 @@ export default function MessageBubble({ role, content, injectionWarning, timesta
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportPDF = async () => {
+    if (!parsed) return;
+    setExporting(true);
+    try {
+      generatePDF(parsed, timestamp);
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -171,6 +183,9 @@ export default function MessageBubble({ role, content, injectionWarning, timesta
                   </div>
                 </div>
                 <div className="doc-actions">
+                  <button className="action-btn export-btn" onClick={handleExportPDF} disabled={exporting}>
+                    {exporting ? 'Generating…' : '⬇ Export PDF'}
+                  </button>
                   <button className="action-btn" onClick={() => setShowRaw((v) => !v)}>
                     {showRaw ? 'Hide JSON' : 'Raw JSON'}
                   </button>
