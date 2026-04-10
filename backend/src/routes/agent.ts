@@ -16,10 +16,10 @@ function getClient(): Anthropic {
 }
 
 // System prompt loaded at startup — server-side only, never sent to client
-const SYSTEM_PROMPT = fs.readFileSync(
-  path.join(__dirname, '../prompts/requirements-agent.txt'),
-  'utf-8'
-);
+// Use process.cwd() (= backend/) rather than __dirname which is unreliable with tsx
+const SYSTEM_PROMPT_PATH = path.resolve(process.cwd(), 'src/prompts/requirements-agent.txt');
+const SYSTEM_PROMPT = fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
+console.log(`[agent] System prompt loaded from: ${SYSTEM_PROMPT_PATH}`);
 
 // Backend injection detection layer (system prompt also handles this)
 const INJECTION_PATTERNS = [
@@ -121,8 +121,9 @@ router.post('/analyze', upload.single('file'), async (req: Request, res: Respons
       auditEntry,
     });
   } catch (error) {
-    console.error('[Agent Error]', error);
-    return res.status(500).json({ error: 'Agent processing failed. Please try again.' });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Agent Error]', message);
+    return res.status(500).json({ error: `Agent processing failed: ${message}` });
   }
 });
 
