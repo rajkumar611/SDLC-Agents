@@ -1,11 +1,6 @@
 import { jsPDF } from 'jspdf';
 
-type AcceptanceCriteria = {
-  given: string;
-  when: string;
-  then: string;
-};
-
+type AcceptanceCriteria = { given: string; when: string; then: string };
 type Requirement = {
   id: string;
   description: string;
@@ -14,217 +9,207 @@ type Requirement = {
   finding?: string | null;
   clarifying_questions?: string[];
 };
-
 type AgentOutput = {
   requirements?: Requirement[];
-  summary?: {
-    total: number;
-    clear: number;
-    ambiguous: number;
-    incomplete: number;
-    security_flags: number;
-  };
+  summary?: { total: number; clear: number; ambiguous: number; incomplete: number; security_flags: number };
   overall_clarifying_questions?: string[];
+  error?: string;
 };
+
+type RGB = [number, number, number];
 
 // Colours
-const PURPLE     = [107, 33, 168] as [number, number, number];
-const PURPLE_LT  = [243, 232, 255] as [number, number, number];
-const GREEN      = [22, 163, 74]   as [number, number, number];
-const GREEN_BG   = [240, 253, 244] as [number, number, number];
-const YELLOW     = [217, 119, 6]   as [number, number, number];
-const YELLOW_BG  = [255, 251, 235] as [number, number, number];
-const BLUE       = [37, 99, 235]   as [number, number, number];
-const BLUE_BG    = [239, 246, 255] as [number, number, number];
-const RED        = [220, 38, 38]   as [number, number, number];
-const RED_BG     = [254, 242, 242] as [number, number, number];
-const GREY_TEXT  = [107, 114, 128] as [number, number, number];
-const DARK_TEXT  = [17, 24, 39]    as [number, number, number];
-const WHITE      = [255, 255, 255] as [number, number, number];
-const BORDER     = [229, 231, 235] as [number, number, number];
-
-const STATUS_COLOR: Record<string, [number, number, number]> = {
-  CLEAR:         GREEN,
-  AMBIGUOUS:     YELLOW,
-  INCOMPLETE:    BLUE,
-  SECURITY_FLAG: RED,
+const C = {
+  purple:     [107, 33, 168]  as RGB,
+  purpleLt:   [243, 232, 255] as RGB,
+  green:      [22, 163, 74]   as RGB,
+  greenBg:    [240, 253, 244] as RGB,
+  greenBd:    [187, 247, 208] as RGB,
+  yellow:     [217, 119, 6]   as RGB,
+  yellowBg:   [255, 251, 235] as RGB,
+  yellowBd:   [253, 230, 138] as RGB,
+  blue:       [37, 99, 235]   as RGB,
+  blueBg:     [239, 246, 255] as RGB,
+  blueBd:     [191, 219, 254] as RGB,
+  red:        [220, 38, 38]   as RGB,
+  redBg:      [254, 242, 242] as RGB,
+  redBd:      [254, 202, 202] as RGB,
+  greyText:   [107, 114, 128] as RGB,
+  darkText:   [17, 24, 39]    as RGB,
+  white:      [255, 255, 255] as RGB,
+  border:     [229, 231, 235] as RGB,
 };
 
-const STATUS_BG: Record<string, [number, number, number]> = {
-  CLEAR:         GREEN_BG,
-  AMBIGUOUS:     YELLOW_BG,
-  INCOMPLETE:    BLUE_BG,
-  SECURITY_FLAG: RED_BG,
+const STATUS_COLOR: Record<string, RGB> = {
+  CLEAR: C.green, AMBIGUOUS: C.yellow, INCOMPLETE: C.blue, SECURITY_FLAG: C.red,
 };
-
+const STATUS_BG: Record<string, RGB> = {
+  CLEAR: C.greenBg, AMBIGUOUS: C.yellowBg, INCOMPLETE: C.blueBg, SECURITY_FLAG: C.redBg,
+};
 const STATUS_LABEL: Record<string, string> = {
-  CLEAR:         '✓ Clear',
-  AMBIGUOUS:     '~ Ambiguous',
-  INCOMPLETE:    '! Incomplete',
-  SECURITY_FLAG: '⚠ Security Flag',
+  CLEAR: 'Clear', AMBIGUOUS: 'Ambiguous', INCOMPLETE: 'Incomplete', SECURITY_FLAG: 'Security Flag',
 };
 
-function wrapText(doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight: number): number {
-  const lines = doc.splitTextToSize(text, maxWidth);
-  doc.text(lines, x, y);
-  return y + lines.length * lineHeight;
-}
+// Safe color helpers — always pass r, g, b individually
+function fill(doc: jsPDF, c: RGB)   { doc.setFillColor(c[0], c[1], c[2]); }
+function stroke(doc: jsPDF, c: RGB) { doc.setDrawColor(c[0], c[1], c[2]); }
+function color(doc: jsPDF, c: RGB)  { doc.setTextColor(c[0], c[1], c[2]); }
 
-function checkPageBreak(doc: jsPDF, y: number, needed: number, margin: number): number {
-  if (y + needed > doc.internal.pageSize.height - margin) {
+function pageBreak(doc: jsPDF, y: number, needed: number, margin: number): number {
+  if (y + needed > doc.internal.pageSize.height - margin - 12) {
     doc.addPage();
-    return margin + 10;
+    return margin + 8;
   }
   return y;
 }
 
 export function generatePDF(data: AgentOutput, timestamp: string): void {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.width;
-  const pageH = doc.internal.pageSize.height;
+  const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW  = doc.internal.pageSize.width;
+  const pageH  = doc.internal.pageSize.height;
   const margin = 18;
-  const contentW = pageW - margin * 2;
-  let y = margin;
+  const cW     = pageW - margin * 2; // content width
+  let y        = margin;
 
-  // ── Cover / header banner ──────────────────────────────────────
-  doc.setFillColor(...PURPLE);
-  doc.rect(0, 0, pageW, 38, 'F');
+  // ── Header banner ────────────────────────────────────────────
+  fill(doc, C.purple);
+  doc.rect(0, 0, pageW, 36, 'F');
 
-  doc.setTextColor(...WHITE);
+  color(doc, C.white);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text('Requirements Analysis Report', margin, 16);
+  doc.setFontSize(14);
+  doc.text('Requirements Analysis Report', margin, 14);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text('FinServe Order Management  ·  Phase 1 — Requirements  ·  MAS Compliant  ·  NDA Active', margin, 24);
-  doc.text(`Generated: ${new Date(timestamp).toLocaleString()}  ·  Model: claude-sonnet-4-6`, margin, 30);
+  doc.setFontSize(8);
+  doc.text('FinServe Order Management  ·  Phase 1 — Requirements  ·  MAS Compliant  ·  NDA Active', margin, 22);
+  doc.text(`Generated: ${new Date(timestamp).toLocaleString()}  ·  Model: claude-sonnet-4-6`, margin, 29);
 
-  y = 46;
+  y = 44;
 
-  // ── Summary strip ──────────────────────────────────────────────
+  // ── Summary strip ────────────────────────────────────────────
   if (data.summary) {
     const s = data.summary;
-    const stats = [
-      { label: 'Total',      value: String(s.total),          color: PURPLE },
-      { label: 'Clear',      value: String(s.clear),          color: GREEN },
-      { label: 'Ambiguous',  value: String(s.ambiguous),      color: YELLOW },
-      { label: 'Incomplete', value: String(s.incomplete),     color: BLUE },
-      ...(s.security_flags > 0 ? [{ label: '⚠ Security', value: String(s.security_flags), color: RED }] : []),
+    const stats: { label: string; value: string; c: RGB }[] = [
+      { label: 'Total',      value: String(s.total),      c: C.purple },
+      { label: 'Clear',      value: String(s.clear),      c: C.green  },
+      { label: 'Ambiguous',  value: String(s.ambiguous),  c: C.yellow },
+      { label: 'Incomplete', value: String(s.incomplete), c: C.blue   },
     ];
+    if (s.security_flags > 0) stats.push({ label: 'Security', value: String(s.security_flags), c: C.red });
 
-    const boxW = contentW / stats.length;
-    doc.setDrawColor(...BORDER);
+    const boxW = cW / stats.length;
     stats.forEach((stat, i) => {
       const bx = margin + i * boxW;
-      doc.setFillColor(...PURPLE_LT);
-      doc.roundedRect(bx, y, boxW - 2, 18, 2, 2, 'F');
+      fill(doc, C.purpleLt);
+      doc.roundedRect(bx, y, boxW - 2, 17, 2, 2, 'F');
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(...stat.color);
-      doc.text(stat.value, bx + boxW / 2 - 1, y + 9, { align: 'center' });
+      doc.setFontSize(13);
+      color(doc, stat.c);
+      doc.text(stat.value, bx + (boxW - 2) / 2, y + 8, { align: 'center' });
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.setTextColor(...GREY_TEXT);
-      doc.text(stat.label.toUpperCase(), bx + boxW / 2 - 1, y + 14.5, { align: 'center' });
+      doc.setFontSize(6.5);
+      color(doc, C.greyText);
+      doc.text(stat.label.toUpperCase(), bx + (boxW - 2) / 2, y + 13.5, { align: 'center' });
     });
-    y += 24;
+    y += 23;
   }
 
-  // ── Requirements ───────────────────────────────────────────────
-  if (data.requirements && data.requirements.length > 0) {
+  // ── Section heading helper ────────────────────────────────────
+  const sectionHeading = (label: string) => {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...GREY_TEXT);
-    doc.text('REQUIREMENTS', margin, y);
-    y += 5;
-
-    doc.setDrawColor(...BORDER);
+    doc.setFontSize(8);
+    color(doc, C.greyText);
+    doc.text(label, margin, y);
+    y += 3;
+    stroke(doc, C.border);
     doc.line(margin, y, pageW - margin, y);
     y += 5;
+  };
+
+  // ── Requirements ─────────────────────────────────────────────
+  if (data.requirements && data.requirements.length > 0) {
+    sectionHeading('REQUIREMENTS');
 
     data.requirements.forEach((req, idx) => {
-      const color    = STATUS_COLOR[req.status] ?? GREY_TEXT;
-      const bgColor  = STATUS_BG[req.status]    ?? ([249, 250, 251] as [number, number, number]);
-      const label    = STATUS_LABEL[req.status] ?? req.status;
+      const sc = STATUS_COLOR[req.status] ?? C.greyText;
+      const sb = STATUS_BG[req.status]    ?? ([249, 250, 251] as RGB);
+      const sl = STATUS_LABEL[req.status] ?? req.status;
 
-      // Estimate height needed
-      y = checkPageBreak(doc, y, 40, margin);
+      y = pageBreak(doc, y, 22, margin);
 
       // Left accent bar
-      doc.setFillColor(...color);
-      doc.rect(margin, y, 3, 8, 'F');
+      fill(doc, sc);
+      doc.rect(margin, y, 3, 7, 'F');
 
-      // Requirement ID + index
+      // Index + ID
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      doc.setTextColor(...PURPLE);
-      doc.text(`${String(idx + 1).padStart(2, '0')}  ${req.id}`, margin + 6, y + 5.5);
+      color(doc, C.purple);
+      doc.text(`${String(idx + 1).padStart(2, '0')}  ${req.id}`, margin + 6, y + 5);
 
       // Status pill
-      const pillText = label;
-      doc.setFontSize(7.5);
-      const pillW = doc.getTextWidth(pillText) + 6;
-      doc.setFillColor(...bgColor);
-      doc.roundedRect(pageW - margin - pillW - 2, y + 1, pillW + 2, 6, 1.5, 1.5, 'F');
-      doc.setTextColor(...color);
-      doc.text(pillText, pageW - margin - pillW / 2 - 1, y + 5.5, { align: 'center' });
+      doc.setFontSize(7);
+      const pillW = doc.getTextWidth(sl) + 6;
+      fill(doc, sb);
+      doc.roundedRect(pageW - margin - pillW - 2, y + 0.5, pillW + 2, 6, 1.5, 1.5, 'F');
+      color(doc, sc);
+      doc.text(sl, pageW - margin - pillW / 2 - 1, y + 5, { align: 'center' });
 
       y += 10;
 
       // Description
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(...DARK_TEXT);
-      const descLines = doc.splitTextToSize(req.description, contentW - 6);
-      y = checkPageBreak(doc, y, descLines.length * 5 + 4, margin);
-      doc.text(descLines, margin + 3, y);
+      color(doc, C.darkText);
+      const descLines = doc.splitTextToSize(req.description, cW - 6);
+      y = pageBreak(doc, y, descLines.length * 5 + 4, margin);
+      doc.text(descLines, margin + 4, y);
       y += descLines.length * 5 + 4;
 
       // Acceptance Criteria
       if (req.acceptance_criteria) {
-        y = checkPageBreak(doc, y, 32, margin);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...GREY_TEXT);
-        doc.text('ACCEPTANCE CRITERIA', margin + 3, y);
-        y += 4;
-
         const ac = req.acceptance_criteria;
-        const colW = (contentW - 6) / 3 - 2;
+        const colW = (cW - 6) / 3 - 2;
         const acItems = [
-          { label: 'GIVEN', text: ac.given,  color: BLUE,   bg: BLUE_BG },
-          { label: 'WHEN',  text: ac.when,   color: YELLOW, bg: YELLOW_BG },
-          { label: 'THEN',  text: ac.then,   color: GREEN,  bg: GREEN_BG },
+          { label: 'GIVEN', text: ac.given,  tc: C.blue,   bg: C.blueBg,   bd: C.blueBd  },
+          { label: 'WHEN',  text: ac.when,   tc: C.yellow, bg: C.yellowBg, bd: C.yellowBd },
+          { label: 'THEN',  text: ac.then,   tc: C.green,  bg: C.greenBg,  bd: C.greenBd  },
         ];
 
-        // Determine tallest column
-        const lineH = 4.5;
-        const maxLines = Math.max(...acItems.map(a => doc.splitTextToSize(a.text, colW - 4).length));
-        const boxH = maxLines * lineH + 12;
+        const lineH  = 4.5;
+        const maxLn  = Math.max(...acItems.map(a => doc.splitTextToSize(a.text, colW - 4).length));
+        const boxH   = maxLn * lineH + 13;
 
-        y = checkPageBreak(doc, y, boxH + 4, margin);
+        y = pageBreak(doc, y, boxH + 8, margin);
+
+        // Label row
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        color(doc, C.greyText);
+        doc.text('ACCEPTANCE CRITERIA', margin + 4, y);
+        y += 4;
 
         acItems.forEach((item, ci) => {
-          const bx = margin + 3 + ci * (colW + 3);
-          doc.setFillColor(...item.bg);
-          doc.roundedRect(bx, y, colW, boxH, 2, 2, 'F');
-          doc.setDrawColor(...item.color);
-          doc.roundedRect(bx, y, colW, boxH, 2, 2, 'S');
+          const bx = margin + 4 + ci * (colW + 3);
+          fill(doc, item.bg);
+          stroke(doc, item.bd);
+          doc.roundedRect(bx, y, colW, boxH, 2, 2, 'FD');
 
+          // Label
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(7);
-          doc.setTextColor(...item.color);
-          doc.text(item.label, bx + colW / 2, y + 5.5, { align: 'center' });
+          color(doc, item.tc);
+          doc.text(item.label, bx + colW / 2, y + 6, { align: 'center' });
 
+          // Text
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
-          doc.setTextColor(...DARK_TEXT);
-          const lines = doc.splitTextToSize(item.text, colW - 4);
-          doc.text(lines, bx + colW / 2, y + 10, { align: 'center' });
+          color(doc, C.darkText);
+          const lines = doc.splitTextToSize(item.text, colW - 5);
+          doc.text(lines, bx + colW / 2, y + 11, { align: 'center' });
         });
 
         y += boxH + 5;
@@ -232,94 +217,96 @@ export function generatePDF(data: AgentOutput, timestamp: string): void {
 
       // Finding
       if (req.finding) {
-        y = checkPageBreak(doc, y, 16, margin);
-        doc.setFillColor(...RED_BG);
-        const findingLines = doc.splitTextToSize(`🔍 Finding: ${req.finding}`, contentW - 10);
-        doc.roundedRect(margin + 3, y, contentW - 3, findingLines.length * 4.5 + 7, 2, 2, 'F');
+        const findLines = doc.splitTextToSize(`Finding: ${req.finding}`, cW - 12);
+        const fh = findLines.length * 4.5 + 8;
+        y = pageBreak(doc, y, fh + 2, margin);
+        fill(doc, C.redBg);
+        stroke(doc, C.redBd);
+        doc.roundedRect(margin + 4, y, cW - 4, fh, 2, 2, 'FD');
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.setTextColor(...RED);
-        doc.text(findingLines, margin + 6, y + 5);
-        y += findingLines.length * 4.5 + 10;
+        color(doc, C.red);
+        doc.text(findLines, margin + 7, y + 5.5);
+        y += fh + 4;
       }
 
       // Clarifying questions
       if (req.clarifying_questions && req.clarifying_questions.length > 0) {
-        y = checkPageBreak(doc, y, 14, margin);
+        y = pageBreak(doc, y, 12, margin);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.setTextColor([2, 132, 199] as unknown as number);
-        doc.text('Clarifying Questions:', margin + 3, y);
-        y += 4.5;
+        color(doc, C.blue);
+        doc.text('Clarifying Questions:', margin + 4, y);
+        y += 5;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
-        doc.setTextColor(...DARK_TEXT);
+        color(doc, C.darkText);
         req.clarifying_questions.forEach((q, qi) => {
-          y = checkPageBreak(doc, y, 8, margin);
-          const qLines = doc.splitTextToSize(`${qi + 1}. ${q}`, contentW - 10);
-          doc.text(qLines, margin + 5, y);
-          y += qLines.length * 4.5;
+          const qLines = doc.splitTextToSize(`${qi + 1}. ${q}`, cW - 12);
+          y = pageBreak(doc, y, qLines.length * 4.5 + 2, margin);
+          doc.text(qLines, margin + 6, y);
+          y += qLines.length * 4.5 + 1;
         });
         y += 2;
       }
 
-      // Divider between requirements
+      // Divider
       y += 3;
       if (idx < (data.requirements?.length ?? 0) - 1) {
-        doc.setDrawColor(...BORDER);
+        stroke(doc, C.border);
         doc.line(margin, y, pageW - margin, y);
         y += 5;
       }
     });
   }
 
-  // ── Overall clarifying questions ───────────────────────────────
+  // ── Overall clarifying questions ──────────────────────────────
   if (data.overall_clarifying_questions && data.overall_clarifying_questions.length > 0) {
-    y = checkPageBreak(doc, y, 20, margin);
     y += 4;
+    const ocq = data.overall_clarifying_questions;
+    const totalLines = ocq.reduce((acc, q) => acc + doc.splitTextToSize(q, cW - 14).length, 0);
+    const sectionH = totalLines * 5 + ocq.length * 2 + 16;
 
-    doc.setFillColor(...BLUE_BG);
-    const sectionH = data.overall_clarifying_questions.length * 8 + 16;
-    doc.roundedRect(margin, y, contentW, sectionH, 3, 3, 'F');
-    doc.setDrawColor(...BLUE);
-    doc.roundedRect(margin, y, contentW, sectionH, 3, 3, 'S');
+    y = pageBreak(doc, y, sectionH + 4, margin);
+
+    fill(doc, C.blueBg);
+    stroke(doc, C.blueBd);
+    doc.roundedRect(margin, y, cW, sectionH, 3, 3, 'FD');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.setTextColor(...BLUE);
+    color(doc, C.blue);
     doc.text('Overall Clarifying Questions for Client', margin + 5, y + 8);
-    y += 12;
+    y += 13;
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    doc.setTextColor(...DARK_TEXT);
-    data.overall_clarifying_questions.forEach((q, i) => {
-      y = checkPageBreak(doc, y, 8, margin);
-      const qLines = doc.splitTextToSize(`${i + 1}. ${q}`, contentW - 12);
+    color(doc, C.darkText);
+    ocq.forEach((q, i) => {
+      const qLines = doc.splitTextToSize(`${i + 1}. ${q}`, cW - 14);
       doc.text(qLines, margin + 6, y);
-      y += qLines.length * 5;
+      y += qLines.length * 5 + 1;
     });
-    y += 6;
   }
 
-  // ── Footer on every page ───────────────────────────────────────
+  // ── Footer on every page ──────────────────────────────────────
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    doc.setFillColor(...PURPLE);
+    fill(doc, C.purple);
     doc.rect(0, pageH - 10, pageW, 10, 'F');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    doc.setTextColor(...WHITE);
+    color(doc, C.white);
     doc.text(
-      `FinServe Order Management · Requirements Analysis Agent · Governed by CLAUDE.md · Page ${p} of ${totalPages}`,
+      `FinServe Order Management  ·  Requirements Analysis Agent  ·  Governed by CLAUDE.md  ·  Page ${p} of ${totalPages}`,
       pageW / 2,
       pageH - 3.5,
       { align: 'center' }
     );
   }
 
-  // ── Save ───────────────────────────────────────────────────────
+  // ── Save ──────────────────────────────────────────────────────
   const dateStr = new Date().toISOString().slice(0, 10);
   doc.save(`FinServe-Requirements-Analysis-${dateStr}.pdf`);
 }
