@@ -146,6 +146,9 @@ export default function MessageBubble({ role, content, injectionWarning, timesta
     setExporting(true);
     try {
       generatePDF(parsed, timestamp);
+    } catch (err) {
+      console.error('[PDF Export Error]', err);
+      alert(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setExporting(false);
     }

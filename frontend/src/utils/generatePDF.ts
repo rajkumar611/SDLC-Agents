@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
 
 type AcceptanceCriteria = {
   given: string;
@@ -304,7 +303,7 @@ export function generatePDF(data: AgentOutput, timestamp: string): void {
   }
 
   // ── Footer on every page ───────────────────────────────────────
-  const totalPages = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+  const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
     doc.setFillColor(...PURPLE);
