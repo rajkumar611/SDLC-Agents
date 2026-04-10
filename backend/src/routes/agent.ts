@@ -6,13 +6,14 @@ import { upload, parseFileContent } from '../middleware/upload';
 
 const router = Router();
 
-// Validate API key at startup
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('ERROR: ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key.');
-  process.exit(1);
+// Client is initialised lazily inside the route so that dotenv has
+// already loaded by the time this code runs (env.ts loads first via server.ts).
+function getClient(): Anthropic {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY is not set. Add it to backend/.env');
+  }
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // System prompt loaded at startup — server-side only, never sent to client
 const SYSTEM_PROMPT = fs.readFileSync(
@@ -95,7 +96,7 @@ router.post('/analyze', upload.single('file'), async (req: Request, res: Respons
     }
 
     // Call Claude — system prompt is never exposed to the frontend
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       system: SYSTEM_PROMPT,

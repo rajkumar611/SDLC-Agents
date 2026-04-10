@@ -1,11 +1,7 @@
+import './env'; // MUST be first — loads .env before any other module runs
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import path from 'path';
 import agentRouter from './routes/agent';
-
-// Explicitly load .env from backend/ directory regardless of where the process is started
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
