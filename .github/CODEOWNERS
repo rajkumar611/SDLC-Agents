@@ -1,0 +1,13 @@
+# CODEOWNERS — FinServe Requirements Agent
+# Defines who must approve Pull Requests for specific files.
+# GitHub enforces these rules automatically.
+#
+# Format: <file pattern>  <GitHub username>
+# -----------------------------------------------
+
+# CLAUDE.md is the governance artifact for this project.
+# Any Pull Request that modifies CLAUDE.md MUST be approved
+# by the Build Lead (@rajkumar611) before it can be merged.
+# No other team member can bypass this rule.
+
+CLAUDE.md @rajkumar611
