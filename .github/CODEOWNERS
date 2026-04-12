@@ -1,6 +1,7 @@
 # CODEOWNERS — FinServe Requirements Agent
 # Defines who must approve Pull Requests for specific files.
-# GitHub enforces these rules automatically.
+# GitHub enforces these rules automatically — only when Branch
+# Protection Rules are enabled on the target branch (e.g. main).
 #
 # Format: <file pattern>  <GitHub username>
 # -----------------------------------------------
@@ -11,3 +12,10 @@
 # No other team member can bypass this rule.
 
 CLAUDE.md @rajkumar611
+
+# CODEOWNERS itself is also a governance artifact.
+# If unprotected, a developer could remove @rajkumar611 from above,
+# then freely modify CLAUDE.md in a later commit — bypassing all governance.
+# Protecting this file closes that attack path.
+
+.github/CODEOWNERS @rajkumar611
