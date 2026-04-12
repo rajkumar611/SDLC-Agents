@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.key
+*.pem
+*.log
+.DS_Store
+frontend/dist/
+
+# Client documents and generated reports — sensitive, must not be committed
+client*.pdf
+FinServe-Requirements-Analysis*.pdf

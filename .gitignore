@@ -1,12 +1,14 @@
-node_modules/
-dist/
-.env
-*.key
-*.pem
-*.log
-.DS_Store
-frontend/dist/
+# Root-level gitignore — FinServe SDLC Agents monorepo
 
-# Client documents and generated reports — sensitive, must not be committed
-client*.pdf
-FinServe-Requirements-Analysis*.pdf
+# Old agent folder — locked by IDE, superseded by agents/requirements/
+finserve-requirements-agent/
+
+# Environment files
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
