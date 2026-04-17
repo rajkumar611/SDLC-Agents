@@ -1,6 +1,3 @@
-// This module MUST be imported first in server.ts.
-// It loads .env before any other module runs their top-level code.
-// Run the backend from agents/requirements/backend/ — that's where .env lives.
 import dotenv from 'dotenv';
 import path from 'path';
 

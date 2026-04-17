@@ -1,14 +1,25 @@
-# Root-level gitignore — FinServe SDLC Agents monorepo
+# Root-level gitignore — SDLC Agents monorepo
 
-# Old agent folder — locked by IDE, superseded by agents/requirements/
-finserve-requirements-agent/
+# Dependencies (all agents)
+**/node_modules/
 
-# Environment files
-.env
+# Build output (all agents)
+**/dist/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Environment files (all agents)
+**/.env
 
 # Logs
 *.log
+**/logs/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/settings.json
+.claude/
+
+# Orchestrator runtime files (created at runtime, not source code)
+orchestrator/backend/uploads/
+orchestrator/backend/*.db

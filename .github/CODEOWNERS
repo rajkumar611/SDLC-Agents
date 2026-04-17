@@ -1,0 +1,26 @@
+# CODEOWNERS — SDLC Agents monorepo
+# Defines who must approve Pull Requests for specific files.
+# GitHub enforces these rules only when Branch Protection Rules
+# are enabled on the target branch (e.g. main/master).
+#
+# Format: <file pattern>  <GitHub username>
+# -----------------------------------------------
+
+# Root CLAUDE.md is the master governance document for all agents.
+# Any PR modifying it MUST be approved by the Build Lead.
+
+CLAUDE.md @rajkumar611
+
+# Per-agent CLAUDE.md files are phase-specific governance artifacts.
+# Add a line here for each new agent as it is created.
+
+agents/requirements/CLAUDE.md @rajkumar611
+orchestrator/CLAUDE.md @rajkumar611
+agents/design/CLAUDE.md @rajkumar611
+agents/qa/CLAUDE.md @rajkumar611
+
+# CODEOWNERS itself is also a governance artifact.
+# Protecting it prevents a developer from removing the above rules
+# and then freely modifying CLAUDE.md in a later PR.
+
+.github/CODEOWNERS @rajkumar611

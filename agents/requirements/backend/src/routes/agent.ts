@@ -37,6 +37,39 @@ function detectInjection(text: string): boolean {
   return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+}
+
+// Escape unescaped control characters inside JSON string values.
+// The model sometimes emits literal newlines/tabs in strings instead of \n / \t.
+function sanitizeJson(text: string): string {
+  let result = '';
+  let inString = false;
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (!inString && ch === '"') {
+      inString = true; result += ch; i++;
+    } else if (inString && ch === '\\') {
+      // Copy escape sequence verbatim
+      result += ch; i++;
+      if (i < text.length) { result += text[i]; i++; }
+    } else if (inString && ch === '"') {
+      inString = false; result += ch; i++;
+    } else if (inString && ch === '\n') {
+      result += '\\n'; i++;
+    } else if (inString && ch === '\r') {
+      result += '\\r'; i++;
+    } else if (inString && ch === '\t') {
+      result += '\\t'; i++;
+    } else {
+      result += ch; i++;
+    }
+  }
+  return result;
+}
+
 function buildAuditEntry(data: {
   phase: string;
   model: string;
@@ -98,12 +131,19 @@ router.post('/analyze', upload.single('file'), async (req: Request, res: Respons
     // Call Claude — system prompt is never exposed to the frontend
     const response = await getClient().messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     });
 
-    const agentText = response.content[0].type === 'text' ? response.content[0].text : '';
+    const agentText = sanitizeJson(stripCodeFences(response.content[0].type === 'text' ? response.content[0].text : ''));
+
+    try {
+      JSON.parse(agentText);
+    } catch {
+      console.error('[requirements-agent] Agent returned non-JSON output:', agentText.slice(0, 200));
+      return res.status(500).json({ error: 'Requirements Agent returned malformed output. Not valid JSON.' });
+    }
 
     const auditEntry = buildAuditEntry({
       phase: 'Requirements',
