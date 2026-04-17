@@ -159,6 +159,43 @@ router.post('/:id/reject', (req: Request, res: Response) => {
   });
 });
 
+// POST /pipeline/:id/retry  — retry the current phase after a failure
+router.post('/:id/retry', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const db = getDb();
+
+  const run = db.prepare(`SELECT * FROM pipeline_runs WHERE id = ?`).get(id) as any;
+  if (!run) {
+    res.status(404).json({ error: 'Run not found.' });
+    return;
+  }
+  if (run.status !== 'failed') {
+    res.status(400).json({ error: `Run is not in a failed state. Current status: ${run.status}` });
+    return;
+  }
+
+  const currentPhase: string = run.current_phase;
+
+  db.prepare(`
+    UPDATE pipeline_runs
+    SET status = 'running', ${currentPhase}_started_at = datetime('now')
+    WHERE id = ?
+  `).run(id);
+
+  broadcastStatus(id, { phase: currentPhase, status: 'running' });
+  res.json({ message: `Retrying ${currentPhase} phase.` });
+
+  const input = currentPhase === 'requirements'
+    ? run.file_path
+    : run[`${getPreviousPhase(currentPhase)}_output`];
+
+  runPhase(id, currentPhase, input).catch((err) => {
+    console.error(`[runner] ${currentPhase} retry failed for run ${id}:`, err);
+    db.prepare(`UPDATE pipeline_runs SET status = 'failed' WHERE id = ?`).run(id);
+    broadcastStatus(id, { phase: currentPhase, status: 'failed', error: String(err) });
+  });
+});
+
 // GET /pipeline/:id/status  — SSE stream
 router.get('/:id/status', (req: Request, res: Response) => {
   const { id } = req.params;

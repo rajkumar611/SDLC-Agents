@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import { initDb } from './db/schema';
 import pipelineRoutes from './routes/pipeline';
+import auditRoutes from './routes/audit';
+import governanceRoutes from './routes/governance';
 
 const app = express();
 const PORT = process.env.PORT || 3010;
@@ -13,8 +15,10 @@ app.use(express.json());
 // Initialise SQLite database and create tables if they don't exist
 initDb();
 
-// Pipeline routes
+// Routes
 app.use('/pipeline', pipelineRoutes);
+app.use('/audit', auditRoutes);
+app.use('/governance', governanceRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

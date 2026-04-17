@@ -30,8 +30,11 @@ function detectInjection(text: string): boolean {
   return INJECTION_PATTERNS.some((p) => p.test(text));
 }
 
-function stripCodeFences(text: string): string {
-  return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+function extractJson(text: string): string {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return text.trim();
+  return text.slice(start, end + 1);
 }
 
 function sanitizeJson(text: string): string {
@@ -94,12 +97,18 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const response = await getClient().messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
+      max_tokens: 32000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     });
 
-    const agentText = sanitizeJson(stripCodeFences(response.content[0].type === 'text' ? response.content[0].text : ''));
+    if (response.stop_reason === 'max_tokens') {
+      console.error('[qa-agent] Response was truncated — max_tokens limit reached');
+      res.status(500).json({ error: 'QA Agent output was truncated. The design is too large for a single pass.' });
+      return;
+    }
+
+    const agentText = sanitizeJson(extractJson(response.content[0].type === 'text' ? response.content[0].text : ''));
 
     try {
       JSON.parse(agentText);
