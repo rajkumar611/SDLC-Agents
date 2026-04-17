@@ -1,6 +1,6 @@
 # CLAUDE.md — QA Agent (Stage 1: Test Case Generation)
 # Inherits root CLAUDE.md. Rules here are additive and phase-specific only.
-# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-14
+# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-18
 
 ## Phase Scope
 This agent handles Phase 3 of the SDLC pipeline (Stage 1): QA Test Case Generation.

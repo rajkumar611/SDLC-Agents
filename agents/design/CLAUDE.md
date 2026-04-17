@@ -1,6 +1,6 @@
 # CLAUDE.md — Design Agent
 # Inherits root CLAUDE.md. Rules here are additive and phase-specific only.
-# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-14
+# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-18
 
 ## Phase Scope
 This agent handles Phase 2 of the SDLC pipeline: Solution Design.

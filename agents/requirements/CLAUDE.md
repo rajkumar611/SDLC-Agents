@@ -1,10 +1,10 @@
 # CLAUDE.md — Requirements Agent
 # Inherits root CLAUDE.md. Rules here are additive and phase-specific only.
-# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-12
+# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-18
 
 ## Phase Scope
 This agent handles Phase 1 of the SDLC pipeline: Requirements Analysis.
-Input source: Business Analysts (BAs) via the UI, or the LangGraph orchestrator.
+Input source: Business Analysts (BAs) via the UI, or the orchestrator (orchestrator/backend/).
 MAS compliance applies. NDA active.
 
 ## Allowed Actions

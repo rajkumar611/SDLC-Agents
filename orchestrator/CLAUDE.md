@@ -1,5 +1,5 @@
 # CLAUDE.md — Orchestrator
-# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-14
+# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-18
 
 ## Role
 The orchestrator is the pipeline brain. It mediates all handoffs between agents.
@@ -9,7 +9,7 @@ the orchestrator runner service.
 ## Scope
 This file governs development of:
 - orchestrator/backend/  — Express API, SQLite state, SSE, runner service
-- orchestrator/frontend/ — BA-facing dashboard (to be built)
+- orchestrator/frontend/ — BA-facing dashboard (React/Vite, port 5173)
 
 Root CLAUDE.md universal rules apply in full. This file is additive only.
 
@@ -31,7 +31,7 @@ Root CLAUDE.md universal rules apply in full. This file is additive only.
 ## Agent API Contracts
 | Agent        | Endpoint                        | Input                        | Port |
 |--------------|---------------------------------|------------------------------|------|
-| Requirements | POST /analyse (multipart/form)  | PDF or DOCX file + feedback? | 3001 |
+| Requirements | POST /api/analyze (multipart/form) | PDF or DOCX file + feedback? | 3001 |
 | Design       | POST /design (JSON body)        | requirements JSON + feedback? | 3002 |
 | QA           | POST /testcases (JSON body)     | design JSON + feedback?       | 3003 |
 

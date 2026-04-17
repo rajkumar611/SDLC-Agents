@@ -1,11 +1,12 @@
 # CLAUDE.md — SDLC Agents Monorepo (Root Governance)
-# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-12
+# Owner: Build Lead (@rajkumar611) | Last reviewed: 2026-04-18
 
 ## Project Overview
 Multi-agent pipeline that automates each phase of the SDLC using Claude.
-Agents are orchestrated via LangGraph — each phase (Requirements, Design,
-Development, QA, Deployment) is a node in a stateful directed graph.
-Agents do not call each other directly; the orchestrator mediates all handoffs.
+Agents are orchestrated via a custom Express + SQLite orchestrator service
+(orchestrator/backend/). Each phase (Requirements, Design, QA) is called
+in sequence by the orchestrator runner — agents do not call each other directly.
+Phases built: Requirements, Design, QA. Planned: Development, Deployment.
 MAS compliance applies. NDA active across all phases.
 
 ## Governance Structure
