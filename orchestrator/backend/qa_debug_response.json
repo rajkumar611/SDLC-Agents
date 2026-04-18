@@ -1,0 +1,1 @@
+{"error":"QA Agent processing failed: Streaming is strongly recommended for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-python#streaming-responses for more details"}

@@ -15,7 +15,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'qa-agent', port: PORT });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[qa-agent] Backend running on http://localhost:${PORT}`);
   console.log(`[qa-agent] Governance: CLAUDE.md active | Model: claude-sonnet-4-6 (pinned)`);
 });
+
+// Disable Node.js 18 default 5-minute request timeout.
+// QA generation can take longer than 5 minutes for large design inputs.
+server.requestTimeout = 0;
+server.headersTimeout = 0;

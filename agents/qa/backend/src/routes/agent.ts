@@ -95,12 +95,17 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const response = await getClient().messages.create({
+    // Use streaming to avoid SDK timeout on large outputs (design inputs can be 40k+ chars)
+    console.log('[qa-agent] Starting streaming request...');
+    const stream = getClient().messages.stream({
       model: 'claude-sonnet-4-6',
-      max_tokens: 32000,
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     });
+
+    const response = await stream.finalMessage(); // max_tokens 16k ≈ 50-80 test cases
+    console.log('[qa-agent] Stream complete. stop_reason:', response.stop_reason);
 
     if (response.stop_reason === 'max_tokens') {
       console.error('[qa-agent] Response was truncated — max_tokens limit reached');
@@ -108,12 +113,13 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const agentText = sanitizeJson(extractJson(response.content[0].type === 'text' ? response.content[0].text : ''));
+    const rawText = response.content[0].type === 'text' ? response.content[0].text : '';
+    const agentText = sanitizeJson(extractJson(rawText));
 
     try {
       JSON.parse(agentText);
     } catch {
-      console.error('[qa-agent] Agent returned non-JSON output:', agentText.slice(0, 200));
+      console.error('[qa-agent] Parse failed after streaming. Raw preview:\n', rawText.slice(0, 500));
       res.status(500).json({ error: 'QA Agent returned malformed output. Not valid JSON.' });
       return;
     }

@@ -139,19 +139,82 @@ async function callDesignAgent(requirementsJson: string, feedback?: string): Pro
 // Endpoint: POST /testcases
 // Returns:  { response: "<agent JSON string>", injectionWarning, model, auditEntry }
 // --------------------------------------------------------------------------
+/**
+ * Strip verbose fields from the design JSON before sending to QA.
+ * QA only needs names/identifiers to write test cases — not full Mermaid
+ * strings or ASCII wireframes, which can account for 60%+ of input tokens.
+ */
+function slimDesignForQa(design: Record<string, unknown>): Record<string, unknown> {
+  const d = (design.design ?? design) as Record<string, unknown>;
+  const slim: Record<string, unknown> = { ...design };
+
+  const slimmedDesign: Record<string, unknown> = {};
+
+  if (d.backend) {
+    const b = d.backend as Record<string, unknown>;
+    slimmedDesign.backend = {
+      architecture_style: b.architecture_style,
+      tech_stack: b.tech_stack,
+      api_endpoints: b.api_endpoints,       // keep full — needed for functional tests
+      services: (b.services as { name: string; responsibility: string }[] | undefined)
+        ?.map(s => ({ name: s.name, responsibility: s.responsibility })),
+    };
+  }
+
+  if (d.database) {
+    const db = d.database as Record<string, unknown>;
+    slimmedDesign.database = {
+      engine: db.engine,
+      tables: db.tables,                    // keep full — needed for DB tests
+      relationships: db.relationships,
+      // erd_mermaid omitted — large string, not needed by QA agent
+    };
+  }
+
+  if (d.frontend) {
+    const f = d.frontend as Record<string, unknown>;
+    slimmedDesign.frontend = {
+      tech_stack: f.tech_stack,
+      // Keep only screen names + descriptions from wireframes, not ASCII art
+      wireframes: (f.wireframes as { screen: string; description: string }[] | undefined)
+        ?.map(w => ({ screen: w.screen, description: w.description })),
+      // Keep user flow names only — not full Mermaid strings
+      user_flows: (f.user_flows as { name: string; steps: string[] }[] | undefined)
+        ?.map(u => ({ name: u.name, steps: u.steps })),
+      components: f.components,
+    };
+  }
+
+  // diagrams omitted entirely — Mermaid strings, not needed by QA agent
+  slim.design = slimmedDesign;
+  return slim;
+}
+
 async function callQaAgent(designJson: string, feedback?: string): Promise<string> {
   const url = `${AGENT_URLS.qa}/testcases`;
 
-  const body: Record<string, unknown> = {
-    design: JSON.parse(designJson),
-  };
+  const fullDesign = JSON.parse(designJson);
+  const slimmedDesign = slimDesignForQa(fullDesign);
+  console.log(`[runner] QA input: full=${designJson.length} chars, slimmed=${JSON.stringify(slimmedDesign).length} chars`);
+
+  const body: Record<string, unknown> = { ...slimmedDesign };
   if (feedback) body.feedback = feedback;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  // QA generation can take 5-15 minutes for large designs — use a 20-minute timeout
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const text = await response.text();

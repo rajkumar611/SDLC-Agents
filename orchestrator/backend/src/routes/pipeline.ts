@@ -42,8 +42,26 @@ router.post('/start', upload.single('document'), async (req: Request, res: Respo
     return;
   }
 
-  const runId = uuidv4();
   const db = getDb();
+
+  // Option B: only one active run at a time
+  const activeRun = db.prepare(`
+    SELECT id, file_name, status FROM pipeline_runs
+    WHERE status IN ('running', 'awaiting_review')
+    LIMIT 1
+  `).get() as { id: string; file_name: string; status: string } | undefined;
+
+  if (activeRun) {
+    // Delete the just-uploaded file — it won't be used
+    fs.unlinkSync(req.file.path);
+    res.status(409).json({
+      error: `A pipeline run is already active (status: ${activeRun.status}, file: "${activeRun.file_name}"). Approve or reject it before starting a new one.`,
+      activeRunId: activeRun.id,
+    });
+    return;
+  }
+
+  const runId = uuidv4();
 
   db.prepare(`
     INSERT INTO pipeline_runs (id, file_name, file_path, current_phase, status, requirements_started_at)

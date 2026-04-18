@@ -54,6 +54,27 @@ export function AuditView() {
     load();
   }, []);
 
+  const [resetting, setResetting] = useState(false);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  async function handleReset() {
+    setResetting(true);
+    setResetResult(null);
+    try {
+      const res = await fetch('/dev/reset', { method: 'POST' });
+      const data = await res.json() as { message: string; deleted: { runs: number; reviews: number; files: number } };
+      setResetResult(`Cleared ${data.deleted.runs} run(s), ${data.deleted.reviews} review(s), ${data.deleted.files} uploaded file(s).`);
+      setRuns([]);
+      setReviews([]);
+    } catch {
+      setResetResult('Reset failed — check orchestrator backend logs.');
+    } finally {
+      setResetting(false);
+      setConfirmReset(false);
+    }
+  }
+
   function refresh() {
     setLoading(true);
     setError(null);
@@ -73,6 +94,33 @@ export function AuditView() {
         <button style={styles.refreshBtn} onClick={refresh} disabled={loading}>{loading ? '…' : '↻ Refresh'}</button>
       </div>
       <p style={styles.hint}>Permanent, tamper-evident log of all pipeline runs and human review decisions. No deletes permitted (MAS compliance).</p>
+
+      {/* Demo Reset — dev only */}
+      <div style={styles.resetBox}>
+        <div style={styles.resetLeft}>
+          <span style={styles.resetBadge}>DEV / DEMO ONLY</span>
+          <span style={styles.resetLabel}>Reset all pipeline data</span>
+          <span style={styles.resetDesc}>Clears both audit tables and all uploaded files. Not permitted in production (MAS compliance).</span>
+        </div>
+        {!confirmReset ? (
+          <button style={styles.resetBtn} onClick={() => setConfirmReset(true)}>
+            Reset Demo Data
+          </button>
+        ) : (
+          <div style={styles.confirmRow}>
+            <span style={styles.confirmText}>This cannot be undone. Continue?</span>
+            <button style={styles.confirmYes} onClick={handleReset} disabled={resetting}>
+              {resetting ? 'Resetting…' : 'Yes, reset'}
+            </button>
+            <button style={styles.confirmNo} onClick={() => setConfirmReset(false)} disabled={resetting}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+      {resetResult && (
+        <div style={styles.resetResult}>{resetResult}</div>
+      )}
 
       {/* Sub-tabs */}
       <div style={styles.subTabBar}>
@@ -186,6 +234,22 @@ const styles: Record<string, React.CSSProperties> = {
   title: { fontSize: 16, fontWeight: 700, color: '#1a1a2e' },
   refreshBtn: { background: 'none', border: '1px solid #bdbdbd', borderRadius: 4, padding: '3px 10px', fontSize: 12, color: '#424242', cursor: 'pointer' },
   hint: { fontSize: 12, color: '#757575', marginBottom: 16, marginTop: 4, lineHeight: 1.5 },
+  resetBox: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+    gap: 12, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 8,
+    padding: '12px 16px', marginBottom: 20,
+  },
+  resetLeft: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', flex: 1 },
+  resetBadge: { background: '#f57f17', color: '#fff', borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', flexShrink: 0 },
+  resetLabel: { fontSize: 13, fontWeight: 600, color: '#e65100' },
+  resetDesc: { fontSize: 12, color: '#795548' },
+  resetBtn: { background: '#e65100', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0 },
+  confirmRow: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' },
+  confirmText: { fontSize: 12, color: '#bf360c', fontWeight: 500 },
+  confirmYes: { background: '#c62828', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  confirmNo: { background: '#fff', color: '#424242', border: '1px solid #e0e0e0', borderRadius: 6, padding: '6px 14px', fontSize: 12, cursor: 'pointer' },
+  resetResult: { background: '#e8f5e9', color: '#2e7d32', border: '1px solid #c8e6c9', borderRadius: 6, padding: '8px 14px', fontSize: 13, fontWeight: 500, marginBottom: 16 },
+
   subTabBar: { display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid #e0e0e0', paddingBottom: 0 },
   subTab: {
     background: 'none', border: 'none', padding: '8px 16px', fontSize: 13, fontWeight: 500,

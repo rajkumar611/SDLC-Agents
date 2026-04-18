@@ -9,6 +9,7 @@ export default defineConfig({
       '/pipeline': { target: 'http://localhost:3010', changeOrigin: true },
       '/audit':    { target: 'http://localhost:3010', changeOrigin: true },
       '/governance': { target: 'http://localhost:3010', changeOrigin: true },
+      '/dev':        { target: 'http://localhost:3010', changeOrigin: true },
     },
   },
 });

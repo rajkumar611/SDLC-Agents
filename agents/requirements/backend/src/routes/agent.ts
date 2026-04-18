@@ -129,12 +129,12 @@ router.post('/analyze', upload.single('file'), async (req: Request, res: Respons
     }
 
     // Call Claude — system prompt is never exposed to the frontend
-    const response = await getClient().messages.create({
+    const response = await getClient().messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
-    });
+    }).finalMessage();
 
     const agentText = sanitizeJson(stripCodeFences(response.content[0].type === 'text' ? response.content[0].text : ''));
 

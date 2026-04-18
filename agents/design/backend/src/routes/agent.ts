@@ -94,12 +94,12 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
-    const response = await getClient().messages.create({
+    const response = await getClient().messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
-    });
+    }).finalMessage();
 
     const agentText = sanitizeJson(stripCodeFences(response.content[0].type === 'text' ? response.content[0].text : ''));
 
