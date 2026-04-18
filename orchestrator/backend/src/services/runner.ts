@@ -20,7 +20,8 @@ export async function runPhase(
   runId: string,
   phase: string,
   input: string,
-  feedback?: string
+  feedback?: string,
+  previousOutput?: string
 ): Promise<void> {
   const db = getDb();
 
@@ -31,9 +32,9 @@ export async function runPhase(
   if (phase === 'requirements') {
     output = await callRequirementsAgent(input, feedback);
   } else if (phase === 'design') {
-    output = await callDesignAgent(input, feedback);
+    output = await callDesignAgent(input, feedback, previousOutput);
   } else if (phase === 'qa') {
-    output = await callQaAgent(input, feedback);
+    output = await callQaAgent(input, feedback, previousOutput);
   } else {
     throw new Error(`Unknown phase: ${phase}`);
   }
@@ -105,13 +106,14 @@ function getMimeType(filePath: string): string {
   return map[ext] ?? 'application/octet-stream';
 }
 
-async function callDesignAgent(requirementsJson: string, feedback?: string): Promise<string> {
+async function callDesignAgent(requirementsJson: string, feedback?: string, previousOutput?: string): Promise<string> {
   const url = `${AGENT_URLS.design}/design`;
 
   const body: Record<string, unknown> = {
     requirements: JSON.parse(requirementsJson),
   };
   if (feedback) body.feedback = feedback;
+  if (previousOutput) body.previousDesign = JSON.parse(previousOutput);
 
   const response = await fetch(url, {
     method: 'POST',
@@ -190,7 +192,7 @@ function slimDesignForQa(design: Record<string, unknown>): Record<string, unknow
   return slim;
 }
 
-async function callQaAgent(designJson: string, feedback?: string): Promise<string> {
+async function callQaAgent(designJson: string, feedback?: string, previousOutput?: string): Promise<string> {
   const url = `${AGENT_URLS.qa}/testcases`;
 
   const fullDesign = JSON.parse(designJson);
@@ -199,6 +201,7 @@ async function callQaAgent(designJson: string, feedback?: string): Promise<strin
 
   const body: Record<string, unknown> = { ...slimmedDesign };
   if (feedback) body.feedback = feedback;
+  if (previousOutput) body.previousTestSuite = JSON.parse(previousOutput);
 
   // QA generation can take 5-15 minutes for large designs — use a 20-minute timeout
   const controller = new AbortController();

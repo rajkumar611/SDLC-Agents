@@ -66,9 +66,10 @@ function sanitizeJson(text: string): string {
 // POST /testcases
 // Body: { design: DesignOutput, feedback?: string }
 router.post('/', async (req: Request, res: Response) => {
-  const { design, feedback } = req.body as {
+  const { design, feedback, previousTestSuite } = req.body as {
     design: unknown;
     feedback?: string;
+    previousTestSuite?: unknown;
   };
 
   if (!design) {
@@ -90,8 +91,11 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   let userContent = `Design JSON:\n${designStr}`;
+  if (previousTestSuite) {
+    userContent += `\n\nYour previous test suite (rejected — revise this):\n${JSON.stringify(previousTestSuite, null, 2)}`;
+  }
   if (feedback) {
-    userContent += `\n\nBA Feedback (from rejected test suite — revise accordingly):\n${feedback}`;
+    userContent += `\n\nRejection reason — address this specifically:\n${feedback}`;
   }
 
   try {

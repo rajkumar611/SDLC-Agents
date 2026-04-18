@@ -10,6 +10,7 @@ import { AuditView } from './components/AuditView';
 import { GovernanceView } from './components/GovernanceView';
 import { GuardrailsView } from './components/GuardrailsView';
 import { useSSE } from './hooks/useSSE';
+import { useElapsedTimer } from './hooks/useElapsedTimer';
 import { PipelineRun, RequirementsOutput, DesignOutput, QAOutput, SSEUpdate, Phase, RunStatus } from './types/pipeline';
 import { generateRequirementsPDF } from './utils/generateRequirementsPDF';
 import { generateDesignPDF } from './utils/generateDesignPDF';
@@ -55,8 +56,14 @@ export default function App() {
         if (update.phase === 'qa' && update.output) next.qa_output = JSON.stringify(update.output);
       }
       if (update.status === 'pipeline_complete') next.status = 'completed';
+      if (update.status === 'rejected') next.status = 'rejected';
       if (update.status === 'failed') { next.status = 'failed'; if (update.error) setPipelineError(update.error); }
-      if (update.phase && update.status === 'running') next.current_phase = update.phase as Phase;
+      if (update.phase && update.status === 'running') {
+        next.current_phase = update.phase as Phase;
+        // Stamp the started_at in local state so the elapsed timer has a reference point
+        const key = `${update.phase}_started_at` as keyof PipelineRun;
+        if (!next[key]) (next as unknown as Record<string, unknown>)[key] = new Date().toISOString();
+      }
       return next;
     });
   }, []);
@@ -98,6 +105,19 @@ export default function App() {
     setCollapsedPhases(prev => ({ ...prev, [phase]: !isPhaseCollapsed(phase) }));
   }
 
+  // Live elapsed timer — updates every 5 seconds while a phase is running.
+  // Use a client-side ref so the timer always starts from the moment the
+  // phase began in this browser session, not a DB timestamp that may be stale.
+  const [phaseStartRef, setPhaseStartRef] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (run?.status === 'running') {
+      setPhaseStartRef(new Date().toISOString());
+    } else {
+      setPhaseStartRef(null);
+    }
+  }, [run?.status === 'running' ? run?.current_phase : null, run?.status]);
+  const elapsed = useElapsedTimer(phaseStartRef, 5000);
+
   const reqOutput = parseOutput<RequirementsOutput>(run?.requirements_output ?? null);
   const designOutput = parseOutput<DesignOutput>(run?.design_output ?? null);
   const qaOutput = parseOutput<QAOutput>(run?.qa_output ?? null);
@@ -118,9 +138,20 @@ export default function App() {
             >
               ↺ Retry {phaseLabel(run.current_phase)}
             </button>
-            <button style={styles.newRunBtn} onClick={() => { setRunId(null); setRun(null); setUploadedFileName(null); setUploadNotice(null); setCollapsedPhases({}); }}>
-              + New Run
-            </button>
+            {(() => {
+              const canStart = run.status === 'completed' || run.status === 'rejected' || run.status === 'failed';
+              const tip = canStart ? 'Start a new pipeline run' : 'Cannot start a new run — current run must be completed, rejected, or failed first';
+              return (
+                <button
+                  style={canStart ? styles.newRunBtn : styles.newRunBtnDisabled}
+                  disabled={!canStart}
+                  title={tip}
+                  onClick={canStart ? () => { setRunId(null); setRun(null); setUploadedFileName(null); setUploadNotice(null); setCollapsedPhases({}); } : undefined}
+                >
+                  + New Run
+                </button>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -156,6 +187,7 @@ export default function App() {
                   <div style={styles.processingBanner}>
                     <div style={styles.processingRow}>
                       <span style={styles.processingLabel}>{phaseLabel(run.current_phase)} Agent is processing</span>
+                      {elapsed && <span style={styles.elapsedBadge}>⏱ {elapsed}</span>}
                       <span style={styles.dotsWrapper}>
                         {[0, 0.2, 0.4].map((delay, i) => (
                           <span key={i} style={{ ...styles.dot, animationDelay: `${delay}s` }}>•</span>
@@ -163,6 +195,13 @@ export default function App() {
                       </span>
                     </div>
                     <div style={styles.progressTrack}><div style={styles.progressBar} /></div>
+                  </div>
+                )}
+
+                {run.status === 'rejected' && run.current_phase === 'requirements' && (
+                  <div style={styles.rejectedBanner}>
+                    <strong>Requirements Rejected.</strong>
+                    <span style={{ marginLeft: 8 }}>Reason recorded in Audit Trail. Upload a corrected document to start a new run.</span>
                   </div>
                 )}
 
@@ -314,13 +353,13 @@ function PhaseSection({ title, collapsed, onToggle, completedAt, summary, onExpo
 
       {/* Body — hidden when collapsed */}
       {!collapsed && (
-        <>
-          <div style={phaseSectionStyles.outputScroll}>
-            {children}
-          </div>
-          {showReviewGate && reviewGate}
-        </>
+        <div style={phaseSectionStyles.outputScroll}>
+          {children}
+        </div>
       )}
+
+      {/* Review gate — always visible when awaiting review, even if section is collapsed */}
+      {showReviewGate && reviewGate}
     </div>
   );
 }
@@ -390,6 +429,11 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid rgba(255,255,255,0.3)', borderRadius: 4,
     padding: '4px 10px', fontSize: 12, cursor: 'pointer',
   },
+  newRunBtnDisabled: {
+    background: 'transparent', color: 'rgba(255,255,255,0.25)',
+    border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
+    padding: '4px 10px', fontSize: 12, cursor: 'not-allowed',
+  },
 
   tabBar: {
     background: '#fff', borderBottom: '2px solid #e0e0e0',
@@ -420,13 +464,23 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#e3f2fd', color: '#1565c0', padding: '14px 16px',
     borderRadius: 8, fontSize: 14, fontWeight: 500, marginBottom: 16,
   },
-  processingRow: { display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 },
+  processingRow: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
   processingLabel: { fontWeight: 600 },
+  elapsedBadge: {
+    background: 'rgba(21,101,192,0.12)', color: '#1565c0',
+    borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 600,
+    fontFamily: 'monospace', marginLeft: 4,
+  },
   dotsWrapper: { display: 'inline-flex', gap: 2, alignItems: 'center' },
   dot: { display: 'inline-block', fontSize: 16, animation: 'pulse-dot 1.4s ease-in-out infinite', lineHeight: 1 },
   progressTrack: { position: 'relative', height: 4, background: 'rgba(21,101,192,0.2)', borderRadius: 2, overflow: 'hidden' },
   progressBar: { position: 'absolute', top: 0, height: '100%', width: '45%', background: '#1565c0', borderRadius: 2, animation: 'progress-slide 1.6s ease-in-out infinite' },
 
+  rejectedBanner: {
+    background: '#fff3e0', color: '#e65100', padding: '12px 16px',
+    borderRadius: 8, fontSize: 14, fontWeight: 500, marginBottom: 16,
+    borderLeft: '4px solid #e65100',
+  },
   failedBanner: {
     background: '#ffebee', color: '#c62828', padding: '12px 16px',
     borderRadius: 8, fontSize: 14, fontWeight: 500, marginBottom: 16,

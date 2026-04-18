@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { agentProcessingTime } from '../hooks/useElapsedTimer';
 
 interface PipelineRunRow {
   id: string;
@@ -142,8 +143,14 @@ export function AuditView() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  {['Run ID', 'File', 'Status', 'Phase', 'Started', 'Completed'].map(h => (
-                    <th key={h} style={styles.th}>{h}</th>
+                  {[
+                    { label: 'Run ID', tip: undefined },
+                    { label: 'File', tip: undefined },
+                    { label: 'State', tip: undefined },
+                    { label: 'Started', tip: undefined },
+                    { label: 'Agent Time', tip: 'Total time agents spent processing (excludes time waiting for human review)' },
+                  ].map(({ label, tip }) => (
+                    <th key={label} style={styles.th} title={tip}>{label}{tip ? ' ⓘ' : ''}</th>
                   ))}
                 </tr>
               </thead>
@@ -152,10 +159,13 @@ export function AuditView() {
                   <tr key={r.id} style={styles.tr}>
                     <td style={{ ...styles.td, fontFamily: 'monospace', fontSize: 11 }}>{r.id.slice(0, 8)}…</td>
                     <td style={styles.td}>{r.file_name ?? '—'}</td>
-                    <td style={styles.td}><StatusBadge status={r.status} /></td>
-                    <td style={styles.td}>{r.current_phase}</td>
-                    <td style={{ ...styles.td, whiteSpace: 'nowrap', color: '#616161' }}>{fmt(r.created_at)}</td>
-                    <td style={{ ...styles.td, whiteSpace: 'nowrap', color: '#616161' }}>{r.completed_at ? fmt(r.completed_at) : '—'}</td>
+                    <td style={styles.td}><StateBadge phase={r.current_phase} status={r.status} /></td>
+                    <td style={{ ...styles.td, whiteSpace: 'nowrap', color: '#616161', fontSize: 12 }}>{fmt(r.created_at)}</td>
+                    <td style={{ ...styles.td, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>
+                      {agentProcessingTime(r) !== '—'
+                        ? agentProcessingTime(r)
+                        : <span style={{ color: '#9e9e9e' }}>In progress</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -200,15 +210,29 @@ export function AuditView() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    running:        { bg: '#e3f2fd', color: '#1565c0' },
-    awaiting_review:{ bg: '#fff8e1', color: '#f57f17' },
-    completed:      { bg: '#e8f5e9', color: '#2e7d32' },
-    failed:         { bg: '#ffebee', color: '#c62828' },
+function StateBadge({ phase, status }: { phase: string; status: string }) {
+  const phaseLabel: Record<string, string> = {
+    requirements: 'Requirements',
+    design: 'Design',
+    qa: 'QA',
   };
-  const s = map[status] ?? { bg: '#f5f5f5', color: '#616161' };
-  return <span style={{ background: s.bg, color: s.color, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600 }}>{status}</span>;
+  const statusMap: Record<string, { bg: string; color: string; label: string }> = {
+    running:         { bg: '#e3f2fd', color: '#1565c0', label: 'Running' },
+    awaiting_review: { bg: '#fff8e1', color: '#f57f17', label: 'Awaiting Review' },
+    completed:       { bg: '#e8f5e9', color: '#2e7d32', label: 'Completed' },
+    rejected:        { bg: '#fff3e0', color: '#e65100', label: 'Rejected' },
+    failed:          { bg: '#ffebee', color: '#c62828', label: 'Failed' },
+  };
+  const s = statusMap[status] ?? { bg: '#f5f5f5', color: '#616161', label: status };
+  const phase_ = phaseLabel[phase] ?? phase;
+  const text = status === 'completed' ? 'Completed'
+    : status === 'rejected' ? `${phase_} · Rejected`
+    : `${phase_} · ${s.label}`;
+  return (
+    <span style={{ background: s.bg, color: s.color, padding: '2px 9px', borderRadius: 10, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+      {text}
+    </span>
+  );
 }
 
 function ActionBadge({ action }: { action: string }) {

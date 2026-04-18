@@ -82,18 +82,23 @@ export function ReviewGate({ runId, phase, readyForHandoff, handoffBlockedReason
             disabled={loading}
             style={{ ...styles.rejectBtn, opacity: loading ? 0.6 : 1 }}
           >
-            ✕ Reject — re-run with feedback
+            ✕ Reject — end this pipeline run
           </button>
         </div>
       ) : (
         <div style={styles.rejectForm}>
           <label style={styles.feedbackLabel}>
-            Provide feedback for the agent to correct this output:
+            Rejection reason <span style={styles.mandatory}>* mandatory</span>
           </label>
+          <p style={styles.feedbackHint}>
+            {phase === 'requirements'
+              ? 'Pipeline ends after rejection — upload a corrected document to start a new run.'
+              : `The ${phase} agent will re-run using your reason as guidance. Approved prior phases are preserved.`}
+          </p>
           <textarea
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="e.g. REQ-003 is missing the error handling scenario. REQ-007 acceptance criteria are too vague..."
+            placeholder="e.g. REQ-003 is missing the error handling scenario. The acceptance criteria for REQ-007 are too vague to implement."
             style={styles.textarea}
             rows={4}
           />
@@ -107,7 +112,7 @@ export function ReviewGate({ runId, phase, readyForHandoff, handoffBlockedReason
                 cursor: loading || !feedback.trim() ? 'not-allowed' : 'pointer',
               }}
             >
-              {loading ? 'Submitting...' : 'Submit Rejection'}
+              {loading ? 'Recording...' : 'Confirm Rejection'}
             </button>
             <button
               onClick={() => { setShowReject(false); setFeedback(''); }}
@@ -200,7 +205,19 @@ const styles: Record<string, React.CSSProperties> = {
   feedbackLabel: {
     fontSize: 13,
     color: '#424242',
+    fontWeight: 600,
+  },
+  mandatory: {
+    fontSize: 11,
+    color: '#c62828',
     fontWeight: 500,
+    marginLeft: 4,
+  },
+  feedbackHint: {
+    fontSize: 12,
+    color: '#757575',
+    margin: '2px 0 0 0',
+    lineHeight: 1.5,
   },
   textarea: {
     border: '1px solid #e0e0e0',

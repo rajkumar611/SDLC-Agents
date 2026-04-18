@@ -1,5 +1,5 @@
 export type Phase = 'requirements' | 'design' | 'qa';
-export type RunStatus = 'running' | 'awaiting_review' | 'completed' | 'failed';
+export type RunStatus = 'running' | 'awaiting_review' | 'completed' | 'failed' | 'rejected';
 
 export interface PipelineRun {
   id: string;

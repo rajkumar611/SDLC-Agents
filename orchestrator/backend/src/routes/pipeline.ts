@@ -148,29 +148,40 @@ router.post('/:id/reject', (req: Request, res: Response) => {
     return;
   }
 
+  if (!feedback?.trim()) {
+    res.status(400).json({ error: 'Rejection reason is mandatory. Please provide feedback before rejecting.' });
+    return;
+  }
+
   const currentPhase: string = run.current_phase;
 
-  // Record the rejection
+  // Always record the rejection in the audit log first
   db.prepare(`
     INSERT INTO pipeline_reviews (run_id, phase, action, feedback) VALUES (?, ?, 'rejected', ?)
-  `).run(id, currentPhase, feedback ?? null);
+  `).run(id, currentPhase, feedback.trim());
 
-  // Re-run the same phase
+  if (currentPhase === 'requirements') {
+    // Requirements rejection is terminal — the source document itself is the problem
+    db.prepare(`UPDATE pipeline_runs SET status = 'rejected' WHERE id = ?`).run(id);
+    broadcastStatus(id, { phase: currentPhase, status: 'rejected' });
+    res.json({ message: 'Requirements rejected. Upload a corrected document to start a new run.' });
+    return;
+  }
+
+  // Design or QA — re-run that phase only; approved prior phases are preserved
   db.prepare(`
     UPDATE pipeline_runs
     SET status = 'running', ${currentPhase}_started_at = datetime('now')
     WHERE id = ?
   `).run(id);
 
-  broadcastStatus(id, { phase: currentPhase, status: 'rerunning', feedback });
-  res.json({ message: `${currentPhase} rejected. Re-running with feedback.` });
+  broadcastStatus(id, { phase: currentPhase, status: 'rerunning', feedback: feedback.trim() });
+  res.json({ message: `${currentPhase} rejected. Re-running with your feedback.` });
 
-  // For re-runs: requirements uses the file path, others use previous phase output
-  const inputForRerun = currentPhase === 'requirements'
-    ? run.file_path
-    : run[`${getPreviousPhase(currentPhase)}_output`];
+  const inputForRerun = run[`${getPreviousPhase(currentPhase)}_output`];
+  const rejectedOutput = run[`${currentPhase}_output`] ?? undefined;
 
-  runPhase(id, currentPhase, inputForRerun, feedback ?? undefined).catch((err) => {
+  runPhase(id, currentPhase, inputForRerun, feedback.trim(), rejectedOutput).catch((err) => {
     console.error(`[runner] ${currentPhase} re-run failed for run ${id}:`, err);
     db.prepare(`UPDATE pipeline_runs SET status = 'failed' WHERE id = ?`).run(id);
     broadcastStatus(id, { phase: currentPhase, status: 'failed', error: String(err) });

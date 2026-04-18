@@ -107,7 +107,7 @@ router.post('/analyze', upload.single('file'), async (req: Request, res: Respons
       injectionSources.push('user message');
     }
 
-    // Combine content for the agent
+    // Combine content for the agent — message already contains previous output + feedback when re-running
     let userContent = message;
     if (fileContent) {
       userContent = `${message ? message + '\n\n' : ''}Document content:\n${fileContent}`;

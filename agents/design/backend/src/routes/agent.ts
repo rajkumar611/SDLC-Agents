@@ -64,9 +64,10 @@ function sanitizeJson(text: string): string {
 // POST /design
 // Body: { requirements: RequirementsOutput, feedback?: string }
 router.post('/', async (req: Request, res: Response) => {
-  const { requirements, feedback } = req.body as {
+  const { requirements, feedback, previousDesign } = req.body as {
     requirements: unknown;
     feedback?: string;
+    previousDesign?: unknown;
   };
 
   if (!requirements) {
@@ -89,8 +90,11 @@ router.post('/', async (req: Request, res: Response) => {
 
   // Build user message for the agent
   let userContent = `Requirements JSON:\n${requirementsStr}`;
+  if (previousDesign) {
+    userContent += `\n\nYour previous design output (rejected — revise this):\n${JSON.stringify(previousDesign, null, 2)}`;
+  }
   if (feedback) {
-    userContent += `\n\nBA Feedback (from rejected design — revise accordingly):\n${feedback}`;
+    userContent += `\n\nRejection reason — address this specifically:\n${feedback}`;
   }
 
   try {
