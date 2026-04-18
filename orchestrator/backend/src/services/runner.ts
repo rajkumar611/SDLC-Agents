@@ -11,6 +11,7 @@ const AGENT_URLS: Record<string, string> = {
   design: process.env.DESIGN_AGENT_URL ?? 'http://localhost:3002',
   qa: process.env.QA_AGENT_URL ?? 'http://localhost:3003',
   dev: process.env.DEV_AGENT_URL ?? 'http://localhost:3004',
+  deploy: process.env.DEPLOY_AGENT_URL ?? 'http://localhost:3005',
 };
 
 /**
@@ -37,8 +38,10 @@ export async function runPhase(
   } else if (phase === 'qa') {
     output = await callQaAgent(input, feedback, previousOutput);
   } else if (phase === 'dev') {
-    // input is a combined JSON string: { design, qa }
     output = await callDevAgent(input, feedback, previousOutput);
+  } else if (phase === 'deploy') {
+    // input is a combined JSON string: { design, devSummary }
+    output = await callDeployAgent(input, feedback, previousOutput);
   } else {
     throw new Error(`Unknown phase: ${phase}`);
   }
@@ -359,6 +362,41 @@ async function callDevAgent(combinedInput: string, feedback?: string, previousOu
 
   if (json.injectionWarning) {
     console.warn(`[runner] Dev Agent injection warning: ${json.injectionWarning}`);
+  }
+
+  JSON.parse(json.response);
+  return json.response;
+}
+
+// --------------------------------------------------------------------------
+// Deploy Agent — accepts { design, devSummary, feedback? } as body
+// Endpoint: POST /deploy/generate
+// --------------------------------------------------------------------------
+async function callDeployAgent(combinedInput: string, feedback?: string, previousOutput?: string): Promise<string> {
+  const url = `${AGENT_URLS.deploy}/deploy/generate`;
+  const { design, devSummary } = JSON.parse(combinedInput) as { design: Record<string, unknown>; devSummary: Record<string, unknown> };
+
+  const body: Record<string, unknown> = { design, devSummary };
+  if (feedback) body.feedback = feedback;
+  if (previousOutput) body.previousConfig = JSON.parse(previousOutput);
+
+  console.log(`[runner] Deploy input: ${JSON.stringify(body).length} chars`);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Deploy Agent returned ${response.status}: ${text}`);
+  }
+
+  const json = await response.json() as { response: string; injectionWarning?: string | null };
+
+  if (json.injectionWarning) {
+    console.warn(`[runner] Deploy Agent injection warning: ${json.injectionWarning}`);
   }
 
   JSON.parse(json.response);

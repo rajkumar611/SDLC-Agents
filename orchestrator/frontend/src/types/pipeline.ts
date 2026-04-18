@@ -1,4 +1,4 @@
-export type Phase = 'requirements' | 'design' | 'qa' | 'dev';
+export type Phase = 'requirements' | 'design' | 'qa' | 'dev' | 'deploy';
 export type RunStatus = 'running' | 'awaiting_review' | 'completed' | 'failed' | 'rejected';
 
 export interface PipelineRun {
@@ -20,6 +20,9 @@ export interface PipelineRun {
   dev_output: string | null;
   dev_started_at: string | null;
   dev_completed_at: string | null;
+  deploy_output: string | null;
+  deploy_started_at: string | null;
+  deploy_completed_at: string | null;
   completed_at: string | null;
 }
 
@@ -284,6 +287,25 @@ export interface DevOutput {
     languages_used: string[];
     frameworks_used: string[];
     test_coverage_note: string;
+  };
+  pipeline_metadata: {
+    phase: string;
+    next_phase: string | null;
+    ready_for_handoff: boolean;
+    handoff_blocked_reason: string | null;
+  };
+}
+
+// ── Deploy Agent output schema ────────────────────────────────────────────────
+
+export interface DeployOutput {
+  files: DevFile[];
+  setup_instructions: string[];
+  summary: {
+    total_files: number;
+    services: string[];
+    base_images: string[];
+    notes: string;
   };
   pipeline_metadata: {
     phase: string;

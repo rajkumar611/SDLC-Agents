@@ -5,6 +5,7 @@ import { RequirementsView } from './components/RequirementsView';
 import { DesignView } from './components/DesignView';
 import { QAView } from './components/QAView';
 import { DevView } from './components/DevView';
+import { DeployView } from './components/DeployView';
 import { ReviewGate } from './components/ReviewGate';
 import { UploadsPanel } from './components/UploadsPanel';
 import { AuditView } from './components/AuditView';
@@ -12,14 +13,14 @@ import { GovernanceView } from './components/GovernanceView';
 import { GuardrailsView } from './components/GuardrailsView';
 import { useSSE } from './hooks/useSSE';
 import { useElapsedTimer } from './hooks/useElapsedTimer';
-import { PipelineRun, RequirementsOutput, DesignOutput, QAOutput, DevOutput, SSEUpdate, Phase, RunStatus } from './types/pipeline';
+import { PipelineRun, RequirementsOutput, DesignOutput, QAOutput, DevOutput, DeployOutput, SSEUpdate, Phase, RunStatus } from './types/pipeline';
 import { generateRequirementsPDF } from './utils/generateRequirementsPDF';
 import { generateDesignPDF } from './utils/generateDesignPDF';
 import { generateQAPDF } from './utils/generateQAPDF';
 import { generatePipelineRunReport } from './utils/generatePipelineRunReport';
 
 type AppTab = 'pipeline' | 'uploads' | 'audit' | 'governance' | 'guardrails';
-const PHASE_ORDER = ['requirements', 'design', 'qa', 'dev'];
+const PHASE_ORDER = ['requirements', 'design', 'qa', 'dev', 'deploy'];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('pipeline');
@@ -70,6 +71,7 @@ export default function App() {
         if (update.phase === 'design' && update.output) next.design_output = JSON.stringify(update.output);
         if (update.phase === 'qa' && update.output) next.qa_output = JSON.stringify(update.output);
         if (update.phase === 'dev' && update.output) next.dev_output = JSON.stringify(update.output);
+        if (update.phase === 'deploy' && update.output) next.deploy_output = JSON.stringify(update.output);
       }
       if (update.status === 'pipeline_complete') next.status = 'completed';
       if (update.status === 'rejected') next.status = 'rejected';
@@ -95,11 +97,12 @@ export default function App() {
     setRun({
       id, created_at: new Date().toISOString(), status: 'running' as RunStatus,
       current_phase: 'requirements' as Phase, file_name: null, file_path: null,
-      requirements_output: null, design_output: null, qa_output: null, dev_output: null,
+      requirements_output: null, design_output: null, qa_output: null, dev_output: null, deploy_output: null,
       requirements_started_at: new Date().toISOString(), requirements_completed_at: null,
       design_started_at: null, design_completed_at: null,
       qa_started_at: null, qa_completed_at: null,
-      dev_started_at: null, dev_completed_at: null, completed_at: null,
+      dev_started_at: null, dev_completed_at: null,
+      deploy_started_at: null, deploy_completed_at: null, completed_at: null,
     });
     setActiveTab('pipeline');
   }
@@ -139,6 +142,7 @@ export default function App() {
   const designOutput = parseOutput<DesignOutput>(run?.design_output ?? null);
   const qaOutput = parseOutput<QAOutput>(run?.qa_output ?? null);
   const devOutput = parseOutput<DevOutput>(run?.dev_output ?? null);
+  const deployOutput = parseOutput<DeployOutput>(run?.deploy_output ?? null);
 
   return (
     <div style={styles.page}>
@@ -314,6 +318,31 @@ export default function App() {
                   </PhaseSection>
                 )}
 
+                {/* Deployment phase */}
+                {deployOutput && (
+                  <PhaseSection
+                    title="Deployment Configuration"
+                    phase="deploy"
+                    collapsed={isPhaseCollapsed('deploy')}
+                    onToggle={() => togglePhase('deploy')}
+                    completedAt={run.deploy_completed_at}
+                    summary={`${deployOutput.files?.length ?? 0} files · ${(deployOutput.summary?.services ?? []).join(', ')}`}
+                    onExport={() => window.location.href = `/pipeline/${run.id}/deploy-download`}
+                    exportLabel="Download ZIP"
+                    showReviewGate={run.status === 'awaiting_review' && run.current_phase === 'deploy'}
+                    reviewGate={
+                      <ReviewGate
+                        runId={run.id} phase="deploy"
+                        readyForHandoff={deployOutput.pipeline_metadata.ready_for_handoff}
+                        handoffBlockedReason={deployOutput.pipeline_metadata.handoff_blocked_reason}
+                        onAction={() => {}}
+                      />
+                    }
+                  >
+                    <DeployView output={deployOutput} runId={run.id} />
+                  </PhaseSection>
+                )}
+
                 {/* Development phase */}
                 {devOutput && (
                   <PhaseSection
@@ -435,7 +464,7 @@ function parseOutput<T>(raw: string | null): T | null {
 }
 
 function phaseLabel(phase: string): string {
-  return ({ requirements: 'Requirements', design: 'Design', qa: 'QA', dev: 'Development' } as Record<string, string>)[phase] ?? phase;
+  return ({ requirements: 'Requirements', design: 'Design', qa: 'QA', dev: 'Development', deploy: 'Deployment' } as Record<string, string>)[phase] ?? phase;
 }
 
 const TAB_LABELS: Record<AppTab, string> = {

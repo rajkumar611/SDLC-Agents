@@ -123,10 +123,23 @@ router.post('/:id/approve', (req: Request, res: Response) => {
   broadcastStatus(id, { phase: nextPhase, status: 'running' });
   res.json({ message: `${currentPhase} approved. ${nextPhase} phase started.` });
 
-  // Dev phase needs both design + qa bundled together; all other phases take the prior phase's output
-  const inputOutput = nextPhase === 'dev'
-    ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
-    : run[`${currentPhase}_output`];
+  // Bundle inputs for phases that need more than just the prior phase's output
+  let inputOutput: string;
+  if (nextPhase === 'dev') {
+    inputOutput = JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) });
+  } else if (nextPhase === 'deploy') {
+    const devOut = JSON.parse(run.dev_output);
+    inputOutput = JSON.stringify({
+      design: JSON.parse(run.design_output),
+      devSummary: {
+        environment_variables: devOut.environment_variables ?? [],
+        summary: devOut.summary ?? {},
+        setup_instructions: devOut.setup_instructions ?? [],
+      },
+    });
+  } else {
+    inputOutput = run[`${currentPhase}_output`];
+  }
 
   runPhase(id, nextPhase, inputOutput).catch((err) => {
     console.error(`[runner] ${nextPhase} phase failed for run ${id}:`, err);
@@ -181,10 +194,18 @@ router.post('/:id/reject', (req: Request, res: Response) => {
   broadcastStatus(id, { phase: currentPhase, status: 'rerunning', feedback: feedback.trim() });
   res.json({ message: `${currentPhase} rejected. Re-running with your feedback.` });
 
-  // Dev phase needs design + qa bundled; all other phases take the prior phase's output
-  const inputForRerun = currentPhase === 'dev'
-    ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
-    : run[`${getPreviousPhase(currentPhase)}_output`];
+  let inputForRerun: string;
+  if (currentPhase === 'dev') {
+    inputForRerun = JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) });
+  } else if (currentPhase === 'deploy') {
+    const devOut = JSON.parse(run.dev_output);
+    inputForRerun = JSON.stringify({
+      design: JSON.parse(run.design_output),
+      devSummary: { environment_variables: devOut.environment_variables ?? [], summary: devOut.summary ?? {}, setup_instructions: devOut.setup_instructions ?? [] },
+    });
+  } else {
+    inputForRerun = run[`${getPreviousPhase(currentPhase)}_output`];
+  }
   const rejectedOutput = run[`${currentPhase}_output`] ?? undefined;
 
   runPhase(id, currentPhase, inputForRerun, feedback.trim(), rejectedOutput).catch((err) => {
@@ -220,11 +241,20 @@ router.post('/:id/retry', (req: Request, res: Response) => {
   broadcastStatus(id, { phase: currentPhase, status: 'running' });
   res.json({ message: `Retrying ${currentPhase} phase.` });
 
-  const input = currentPhase === 'requirements'
-    ? run.file_path
-    : currentPhase === 'dev'
-      ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
-      : run[`${getPreviousPhase(currentPhase)}_output`];
+  let input: string;
+  if (currentPhase === 'requirements') {
+    input = run.file_path;
+  } else if (currentPhase === 'dev') {
+    input = JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) });
+  } else if (currentPhase === 'deploy') {
+    const devOut = JSON.parse(run.dev_output);
+    input = JSON.stringify({
+      design: JSON.parse(run.design_output),
+      devSummary: { environment_variables: devOut.environment_variables ?? [], summary: devOut.summary ?? {}, setup_instructions: devOut.setup_instructions ?? [] },
+    });
+  } else {
+    input = run[`${getPreviousPhase(currentPhase)}_output`];
+  }
 
   runPhase(id, currentPhase, input).catch((err) => {
     console.error(`[runner] ${currentPhase} retry failed for run ${id}:`, err);
@@ -348,6 +378,40 @@ router.get('/:id/download', (req: Request, res: Response) => {
   archive.finalize();
 });
 
+// GET /pipeline/:id/deploy-download  — stream a ZIP of deployment config files
+router.get('/:id/deploy-download', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const db = getDb();
+
+  const run = db.prepare(`SELECT deploy_output, file_name FROM pipeline_runs WHERE id = ?`).get(id) as any;
+  if (!run || !run.deploy_output) {
+    res.status(404).json({ error: 'No deployment output found for this run.' });
+    return;
+  }
+
+  let deployOutput: { files?: Array<{ path: string; content: string }> };
+  try {
+    deployOutput = JSON.parse(run.deploy_output);
+  } catch {
+    res.status(500).json({ error: 'Deploy output is not valid JSON.' });
+    return;
+  }
+
+  const files = deployOutput.files ?? [];
+  const baseName = (run.file_name ?? 'project').replace(/\.[^.]+$/, '');
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${baseName}-deploy.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => console.error('[deploy-download] archiver error:', err));
+  archive.pipe(res);
+  for (const file of files) {
+    if (file.path && file.content != null) archive.append(file.content, { name: file.path });
+  }
+  archive.finalize();
+});
+
 // GET /pipeline/:id  — full run details (for dashboard initial load)
 router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
@@ -365,13 +429,13 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 function getNextPhase(phase: string): string | null {
-  const order = ['requirements', 'design', 'qa', 'dev'];
+  const order = ['requirements', 'design', 'qa', 'dev', 'deploy'];
   const idx = order.indexOf(phase);
   return idx >= 0 && idx < order.length - 1 ? order[idx + 1] : null;
 }
 
 function getPreviousPhase(phase: string): string | null {
-  const order = ['requirements', 'design', 'qa', 'dev'];
+  const order = ['requirements', 'design', 'qa', 'dev', 'deploy'];
   const idx = order.indexOf(phase);
   return idx > 0 ? order[idx - 1] : null;
 }

@@ -6,6 +6,7 @@ const PHASES: { key: Phase; label: string }[] = [
   { key: 'design', label: 'Design' },
   { key: 'qa', label: 'QA Test Cases' },
   { key: 'dev', label: 'Development' },
+  { key: 'deploy', label: 'Deployment' },
 ];
 
 interface Props {

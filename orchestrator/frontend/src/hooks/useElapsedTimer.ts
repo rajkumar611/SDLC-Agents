@@ -75,12 +75,15 @@ export function agentProcessingTime(run: {
   qa_completed_at: string | null;
   dev_started_at?: string | null;
   dev_completed_at?: string | null;
+  deploy_started_at?: string | null;
+  deploy_completed_at?: string | null;
 }): string {
   const phases: [string | null, string | null][] = [
-    [run.requirements_started_at, run.requirements_completed_at],
-    [run.design_started_at,       run.design_completed_at],
-    [run.qa_started_at,           run.qa_completed_at],
-    [run.dev_started_at ?? null,  run.dev_completed_at ?? null],
+    [run.requirements_started_at,      run.requirements_completed_at],
+    [run.design_started_at,            run.design_completed_at],
+    [run.qa_started_at,                run.qa_completed_at],
+    [run.dev_started_at ?? null,       run.dev_completed_at ?? null],
+    [run.deploy_started_at ?? null,    run.deploy_completed_at ?? null],
   ];
   let total = 0;
   let anyPhase = false;

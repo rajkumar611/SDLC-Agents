@@ -42,6 +42,10 @@ export function initDb(): void {
       dev_started_at           TEXT,
       dev_completed_at         TEXT,
 
+      deploy_output            TEXT,
+      deploy_started_at        TEXT,
+      deploy_completed_at      TEXT,
+
       completed_at TEXT
     );
   `);
@@ -49,9 +53,12 @@ export function initDb(): void {
   // Safe migration for existing databases — add dev columns if they don't exist yet
   const cols = db.prepare(`PRAGMA table_info(pipeline_runs)`).all() as { name: string }[];
   const colNames = new Set(cols.map(c => c.name));
-  if (!colNames.has('dev_output'))       db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_output TEXT`);
-  if (!colNames.has('dev_started_at'))   db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_started_at TEXT`);
-  if (!colNames.has('dev_completed_at')) db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_completed_at TEXT`);
+  if (!colNames.has('dev_output'))          db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_output TEXT`);
+  if (!colNames.has('dev_started_at'))      db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_started_at TEXT`);
+  if (!colNames.has('dev_completed_at'))    db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_completed_at TEXT`);
+  if (!colNames.has('deploy_output'))       db.exec(`ALTER TABLE pipeline_runs ADD COLUMN deploy_output TEXT`);
+  if (!colNames.has('deploy_started_at'))   db.exec(`ALTER TABLE pipeline_runs ADD COLUMN deploy_started_at TEXT`);
+  if (!colNames.has('deploy_completed_at')) db.exec(`ALTER TABLE pipeline_runs ADD COLUMN deploy_completed_at TEXT`);
 
   // Each row is one human review action (approve or reject) on a pipeline run phase
   db.exec(`

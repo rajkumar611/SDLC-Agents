@@ -15,6 +15,8 @@ interface PipelineRunRow {
   qa_completed_at: string | null;
   dev_started_at: string | null;
   dev_completed_at: string | null;
+  deploy_started_at: string | null;
+  deploy_completed_at: string | null;
   completed_at: string | null;
 }
 
@@ -218,6 +220,7 @@ function StateBadge({ phase, status }: { phase: string; status: string }) {
     design: 'Design',
     qa: 'QA',
     dev: 'Development',
+    deploy: 'Deployment',
   };
   const statusMap: Record<string, { bg: string; color: string; label: string }> = {
     running:         { bg: '#e3f2fd', color: '#1565c0', label: 'Running' },
