@@ -38,9 +38,20 @@ export function initDb(): void {
       qa_started_at             TEXT,
       qa_completed_at           TEXT,
 
+      dev_output               TEXT,
+      dev_started_at           TEXT,
+      dev_completed_at         TEXT,
+
       completed_at TEXT
     );
   `);
+
+  // Safe migration for existing databases — add dev columns if they don't exist yet
+  const cols = db.prepare(`PRAGMA table_info(pipeline_runs)`).all() as { name: string }[];
+  const colNames = new Set(cols.map(c => c.name));
+  if (!colNames.has('dev_output'))       db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_output TEXT`);
+  if (!colNames.has('dev_started_at'))   db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_started_at TEXT`);
+  if (!colNames.has('dev_completed_at')) db.exec(`ALTER TABLE pipeline_runs ADD COLUMN dev_completed_at TEXT`);
 
   // Each row is one human review action (approve or reject) on a pipeline run phase
   db.exec(`

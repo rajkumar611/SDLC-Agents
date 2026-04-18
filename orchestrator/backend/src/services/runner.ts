@@ -10,6 +10,7 @@ const AGENT_URLS: Record<string, string> = {
   requirements: process.env.REQUIREMENTS_AGENT_URL ?? 'http://localhost:3001',
   design: process.env.DESIGN_AGENT_URL ?? 'http://localhost:3002',
   qa: process.env.QA_AGENT_URL ?? 'http://localhost:3003',
+  dev: process.env.DEV_AGENT_URL ?? 'http://localhost:3004',
 };
 
 /**
@@ -35,6 +36,9 @@ export async function runPhase(
     output = await callDesignAgent(input, feedback, previousOutput);
   } else if (phase === 'qa') {
     output = await callQaAgent(input, feedback, previousOutput);
+  } else if (phase === 'dev') {
+    // input is a combined JSON string: { design, qa }
+    output = await callDevAgent(input, feedback, previousOutput);
   } else {
     throw new Error(`Unknown phase: ${phase}`);
   }
@@ -228,6 +232,133 @@ async function callQaAgent(designJson: string, feedback?: string, previousOutput
 
   if (json.injectionWarning) {
     console.warn(`[runner] QA Agent injection warning: ${json.injectionWarning}`);
+  }
+
+  JSON.parse(json.response);
+  return json.response;
+}
+
+// --------------------------------------------------------------------------
+// Dev Agent — accepts { design, qa, feedback?, previousScaffold? } as body
+// Endpoint: POST /dev/generate
+// Input:    combined JSON string { design, qa } — bundled by the orchestrator
+// Returns:  { response: "<agent JSON string>", injectionWarning, model, auditEntry }
+// --------------------------------------------------------------------------
+/**
+ * Strip bulky non-structural fields from design before sending to Dev Agent.
+ * Mermaid strings and ASCII wireframes account for large token usage but
+ * add no value for code generation — the agent only needs schemas and contracts.
+ */
+function slimDesignForDev(design: Record<string, unknown>): Record<string, unknown> {
+  const d = (design.design ?? design) as Record<string, unknown>;
+  const slimmed: Record<string, unknown> = {};
+
+  if (d.backend) {
+    const b = d.backend as Record<string, unknown>;
+    slimmed.backend = {
+      architecture_style: b.architecture_style,
+      tech_stack: b.tech_stack,
+      services: b.services,
+      api_endpoints: b.api_endpoints,
+    };
+  }
+  if (d.database) {
+    const db = d.database as Record<string, unknown>;
+    slimmed.database = {
+      type: db.type,
+      engine: db.engine,
+      tables: db.tables,
+      relationships: db.relationships,
+      // erd_mermaid omitted — not needed for code generation
+    };
+  }
+  if (d.frontend) {
+    const f = d.frontend as Record<string, unknown>;
+    slimmed.frontend = {
+      architecture_style: f.architecture_style,
+      tech_stack: f.tech_stack,
+      components: f.components,
+      // wireframes ascii_layout omitted — only keep screen names
+      wireframes: (f.wireframes as { screen: string; description: string }[] | undefined)
+        ?.map(w => ({ screen: w.screen, description: w.description })),
+      // user flow steps kept, mermaid strings omitted
+      user_flows: (f.user_flows as { name: string; steps: string[] }[] | undefined)
+        ?.map(u => ({ name: u.name, steps: u.steps })),
+    };
+  }
+  // diagrams omitted entirely
+
+  return { ...design, design: slimmed };
+}
+
+/**
+ * Strip verbose QA fields — Dev Agent only needs test IDs, titles, and
+ * which API endpoints / DB tables each test covers to structure the code.
+ */
+function slimQaForDev(qa: Record<string, unknown>): Record<string, unknown> {
+  type TestCase = {
+    id: string; title: string; priority: string;
+    linked_api_endpoint?: string | null;
+    linked_table?: string | null;
+    linked_screen?: string | null;
+    attack_vector?: string;
+    edge_type?: string;
+  };
+
+  function slimTests(tests: TestCase[] | undefined) {
+    return (tests ?? []).map(t => ({
+      id: t.id,
+      title: t.title,
+      priority: t.priority,
+      ...(t.linked_api_endpoint ? { linked_api_endpoint: t.linked_api_endpoint } : {}),
+      ...(t.linked_table        ? { linked_table: t.linked_table }               : {}),
+      ...(t.linked_screen       ? { linked_screen: t.linked_screen }             : {}),
+      ...(t.attack_vector       ? { attack_vector: t.attack_vector }             : {}),
+      ...(t.edge_type           ? { edge_type: t.edge_type }                     : {}),
+    }));
+  }
+
+  const suite = qa.test_suite as Record<string, TestCase[]> | undefined;
+  return {
+    summary: qa.summary,
+    test_suite: suite ? {
+      functional:  slimTests(suite.functional),
+      database:    slimTests(suite.database),
+      ui:          slimTests(suite.ui),
+      security:    slimTests(suite.security),
+      edge_cases:  slimTests(suite.edge_cases),
+    } : {},
+    pipeline_metadata: qa.pipeline_metadata,
+  };
+}
+
+async function callDevAgent(combinedInput: string, feedback?: string, previousOutput?: string): Promise<string> {
+  const url = `${AGENT_URLS.dev}/dev/generate`;
+  const { design, qa } = JSON.parse(combinedInput) as { design: Record<string, unknown>; qa: Record<string, unknown> };
+
+  const slimDesign = slimDesignForDev(design);
+  const slimQa = slimQaForDev(qa);
+  console.log(`[runner] Dev input: design=${JSON.stringify(slimDesign).length} chars, qa=${JSON.stringify(slimQa).length} chars`);
+
+  const body: Record<string, unknown> = { design: slimDesign, qa: slimQa };
+  if (feedback) body.feedback = feedback;
+  if (previousOutput) body.previousScaffold = JSON.parse(previousOutput);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Dev Agent returned ${response.status}: ${text}`);
+  }
+
+  const json = await response.json() as { response: string; injectionWarning?: string | null };
+
+  if (json.injectionWarning) {
+    console.warn(`[runner] Dev Agent injection warning: ${json.injectionWarning}`);
   }
 
   JSON.parse(json.response);

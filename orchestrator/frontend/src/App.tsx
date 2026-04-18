@@ -4,6 +4,7 @@ import { PhaseStepper } from './components/PhaseStepper';
 import { RequirementsView } from './components/RequirementsView';
 import { DesignView } from './components/DesignView';
 import { QAView } from './components/QAView';
+import { DevView } from './components/DevView';
 import { ReviewGate } from './components/ReviewGate';
 import { UploadsPanel } from './components/UploadsPanel';
 import { AuditView } from './components/AuditView';
@@ -11,14 +12,14 @@ import { GovernanceView } from './components/GovernanceView';
 import { GuardrailsView } from './components/GuardrailsView';
 import { useSSE } from './hooks/useSSE';
 import { useElapsedTimer } from './hooks/useElapsedTimer';
-import { PipelineRun, RequirementsOutput, DesignOutput, QAOutput, SSEUpdate, Phase, RunStatus } from './types/pipeline';
+import { PipelineRun, RequirementsOutput, DesignOutput, QAOutput, DevOutput, SSEUpdate, Phase, RunStatus } from './types/pipeline';
 import { generateRequirementsPDF } from './utils/generateRequirementsPDF';
 import { generateDesignPDF } from './utils/generateDesignPDF';
 import { generateQAPDF } from './utils/generateQAPDF';
 import { generatePipelineRunReport } from './utils/generatePipelineRunReport';
 
 type AppTab = 'pipeline' | 'uploads' | 'audit' | 'governance' | 'guardrails';
-const PHASE_ORDER = ['requirements', 'design', 'qa'];
+const PHASE_ORDER = ['requirements', 'design', 'qa', 'dev'];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('pipeline');
@@ -29,6 +30,20 @@ export default function App() {
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   // Tracks explicit user expand/collapse overrides; undefined = use auto-collapse logic
   const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean | undefined>>({});
+
+  // On mount — auto-reconnect to any active run so a page refresh doesn't lose state
+  React.useEffect(() => {
+    fetch('/pipeline/active')
+      .then(r => r.json())
+      .then((data: { run: PipelineRun | null }) => {
+        if (data.run && !runId) {
+          setRunId(data.run.id);
+          setRun(data.run);
+          setActiveTab('pipeline');
+        }
+      })
+      .catch(() => { /* no active run or network error — start fresh */ });
+  }, []);
 
   React.useEffect(() => {
     if (!uploadNotice) return;
@@ -54,6 +69,7 @@ export default function App() {
         if (update.phase === 'requirements' && update.output) next.requirements_output = JSON.stringify(update.output);
         if (update.phase === 'design' && update.output) next.design_output = JSON.stringify(update.output);
         if (update.phase === 'qa' && update.output) next.qa_output = JSON.stringify(update.output);
+        if (update.phase === 'dev' && update.output) next.dev_output = JSON.stringify(update.output);
       }
       if (update.status === 'pipeline_complete') next.status = 'completed';
       if (update.status === 'rejected') next.status = 'rejected';
@@ -79,10 +95,11 @@ export default function App() {
     setRun({
       id, created_at: new Date().toISOString(), status: 'running' as RunStatus,
       current_phase: 'requirements' as Phase, file_name: null, file_path: null,
-      requirements_output: null, design_output: null, qa_output: null,
+      requirements_output: null, design_output: null, qa_output: null, dev_output: null,
       requirements_started_at: new Date().toISOString(), requirements_completed_at: null,
       design_started_at: null, design_completed_at: null,
-      qa_started_at: null, qa_completed_at: null, completed_at: null,
+      qa_started_at: null, qa_completed_at: null,
+      dev_started_at: null, dev_completed_at: null, completed_at: null,
     });
     setActiveTab('pipeline');
   }
@@ -121,6 +138,7 @@ export default function App() {
   const reqOutput = parseOutput<RequirementsOutput>(run?.requirements_output ?? null);
   const designOutput = parseOutput<DesignOutput>(run?.design_output ?? null);
   const qaOutput = parseOutput<QAOutput>(run?.qa_output ?? null);
+  const devOutput = parseOutput<DevOutput>(run?.dev_output ?? null);
 
   return (
     <div style={styles.page}>
@@ -295,6 +313,31 @@ export default function App() {
                     <QAView output={qaOutput} />
                   </PhaseSection>
                 )}
+
+                {/* Development phase */}
+                {devOutput && (
+                  <PhaseSection
+                    title="Development — Code Scaffold"
+                    phase="dev"
+                    collapsed={isPhaseCollapsed('dev')}
+                    onToggle={() => togglePhase('dev')}
+                    completedAt={run.dev_completed_at}
+                    summary={`${devOutput.files?.length ?? 0} files · ${(devOutput.summary?.languages_used ?? []).join(', ')}`}
+                    onExport={() => window.location.href = `/pipeline/${run.id}/download`}
+                    exportLabel="Download ZIP"
+                    showReviewGate={run.status === 'awaiting_review' && run.current_phase === 'dev'}
+                    reviewGate={
+                      <ReviewGate
+                        runId={run.id} phase="dev"
+                        readyForHandoff={devOutput.pipeline_metadata.ready_for_handoff}
+                        handoffBlockedReason={devOutput.pipeline_metadata.handoff_blocked_reason}
+                        onAction={() => {}}
+                      />
+                    }
+                  >
+                    <DevView output={devOutput} runId={run.id} />
+                  </PhaseSection>
+                )}
               </>
             )}
           </>
@@ -327,12 +370,13 @@ interface PhaseSectionProps {
   completedAt: string | null;
   summary: string;
   onExport: () => void;
+  exportLabel?: string;
   showReviewGate: boolean;
   reviewGate: React.ReactNode;
   children: React.ReactNode;
 }
 
-function PhaseSection({ title, collapsed, onToggle, completedAt, summary, onExport, showReviewGate, reviewGate, children }: PhaseSectionProps) {
+function PhaseSection({ title, collapsed, onToggle, completedAt, summary, onExport, exportLabel, showReviewGate, reviewGate, children }: PhaseSectionProps) {
   return (
     <div style={phaseSectionStyles.wrapper}>
       {/* Header — always visible, click to collapse/expand */}
@@ -347,7 +391,7 @@ function PhaseSection({ title, collapsed, onToggle, completedAt, summary, onExpo
           style={phaseSectionStyles.exportBtn}
           onClick={(e) => { e.stopPropagation(); onExport(); }}
         >
-          Export PDF
+          {exportLabel ?? 'Export PDF'}
         </button>
       </div>
 
@@ -391,7 +435,7 @@ function parseOutput<T>(raw: string | null): T | null {
 }
 
 function phaseLabel(phase: string): string {
-  return ({ requirements: 'Requirements', design: 'Design', qa: 'QA' } as Record<string, string>)[phase] ?? phase;
+  return ({ requirements: 'Requirements', design: 'Design', qa: 'QA', dev: 'Development' } as Record<string, string>)[phase] ?? phase;
 }
 
 const TAB_LABELS: Record<AppTab, string> = {

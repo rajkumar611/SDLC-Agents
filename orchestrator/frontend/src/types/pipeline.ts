@@ -1,4 +1,4 @@
-export type Phase = 'requirements' | 'design' | 'qa';
+export type Phase = 'requirements' | 'design' | 'qa' | 'dev';
 export type RunStatus = 'running' | 'awaiting_review' | 'completed' | 'failed' | 'rejected';
 
 export interface PipelineRun {
@@ -17,6 +17,9 @@ export interface PipelineRun {
   design_completed_at: string | null;
   qa_started_at: string | null;
   qa_completed_at: string | null;
+  dev_output: string | null;
+  dev_started_at: string | null;
+  dev_completed_at: string | null;
   completed_at: string | null;
 }
 
@@ -246,6 +249,45 @@ export interface RequirementsOutput {
   pipeline_metadata: {
     phase: string;
     next_phase: string;
+    ready_for_handoff: boolean;
+    handoff_blocked_reason: string | null;
+  };
+}
+
+// ── Dev Agent output schema ───────────────────────────────────────────────────
+
+export interface DevFile {
+  path: string;
+  language: string;
+  description: string;
+  content: string;
+}
+
+export interface DevEnvVar {
+  name: string;
+  description: string;
+  example: string;
+  required: boolean;
+}
+
+export interface DevOutput {
+  files: DevFile[];
+  project_structure: {
+    root: string;
+    description: string;
+    tree: string[];
+  };
+  setup_instructions: string[];
+  environment_variables: DevEnvVar[];
+  summary: {
+    total_files: number;
+    languages_used: string[];
+    frameworks_used: string[];
+    test_coverage_note: string;
+  };
+  pipeline_metadata: {
+    phase: string;
+    next_phase: string | null;
     ready_for_handoff: boolean;
     handoff_blocked_reason: string | null;
   };

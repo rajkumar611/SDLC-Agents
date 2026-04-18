@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db/schema';
 import { runPhase } from '../services/runner';
@@ -122,8 +123,10 @@ router.post('/:id/approve', (req: Request, res: Response) => {
   broadcastStatus(id, { phase: nextPhase, status: 'running' });
   res.json({ message: `${currentPhase} approved. ${nextPhase} phase started.` });
 
-  // Determine input for next phase
-  const inputOutput = run[`${currentPhase}_output`];
+  // Dev phase needs both design + qa bundled together; all other phases take the prior phase's output
+  const inputOutput = nextPhase === 'dev'
+    ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
+    : run[`${currentPhase}_output`];
 
   runPhase(id, nextPhase, inputOutput).catch((err) => {
     console.error(`[runner] ${nextPhase} phase failed for run ${id}:`, err);
@@ -178,7 +181,10 @@ router.post('/:id/reject', (req: Request, res: Response) => {
   broadcastStatus(id, { phase: currentPhase, status: 'rerunning', feedback: feedback.trim() });
   res.json({ message: `${currentPhase} rejected. Re-running with your feedback.` });
 
-  const inputForRerun = run[`${getPreviousPhase(currentPhase)}_output`];
+  // Dev phase needs design + qa bundled; all other phases take the prior phase's output
+  const inputForRerun = currentPhase === 'dev'
+    ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
+    : run[`${getPreviousPhase(currentPhase)}_output`];
   const rejectedOutput = run[`${currentPhase}_output`] ?? undefined;
 
   runPhase(id, currentPhase, inputForRerun, feedback.trim(), rejectedOutput).catch((err) => {
@@ -216,7 +222,9 @@ router.post('/:id/retry', (req: Request, res: Response) => {
 
   const input = currentPhase === 'requirements'
     ? run.file_path
-    : run[`${getPreviousPhase(currentPhase)}_output`];
+    : currentPhase === 'dev'
+      ? JSON.stringify({ design: JSON.parse(run.design_output), qa: JSON.parse(run.qa_output) })
+      : run[`${getPreviousPhase(currentPhase)}_output`];
 
   runPhase(id, currentPhase, input).catch((err) => {
     console.error(`[runner] ${currentPhase} retry failed for run ${id}:`, err);
@@ -254,6 +262,18 @@ router.get('/:id/status', (req: Request, res: Response) => {
   });
 });
 
+// GET /pipeline/active  — returns the currently running or awaiting_review run, if any
+router.get('/active', (_req: Request, res: Response) => {
+  const db = getDb();
+  const run = db.prepare(`
+    SELECT * FROM pipeline_runs
+    WHERE status IN ('running', 'awaiting_review')
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get() as any;
+  res.json({ run: run ?? null });
+});
+
 // GET /pipeline/uploads  — list all files in the uploads directory
 router.get('/uploads', (_req: Request, res: Response) => {
   try {
@@ -287,6 +307,47 @@ router.delete('/uploads/:filename', (req: Request, res: Response) => {
   res.json({ message: `Deleted: ${filename}` });
 });
 
+// GET /pipeline/:id/download  — stream a ZIP of all dev-agent generated files
+router.get('/:id/download', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const db = getDb();
+
+  const run = db.prepare(`SELECT dev_output, file_name FROM pipeline_runs WHERE id = ?`).get(id) as any;
+  if (!run || !run.dev_output) {
+    res.status(404).json({ error: 'No development output found for this run.' });
+    return;
+  }
+
+  let devOutput: { files?: Array<{ path: string; content: string }> };
+  try {
+    devOutput = JSON.parse(run.dev_output);
+  } catch {
+    res.status(500).json({ error: 'Dev output is not valid JSON.' });
+    return;
+  }
+
+  const files = devOutput.files ?? [];
+  const baseName = (run.file_name ?? 'scaffold').replace(/\.[^.]+$/, '');
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${baseName}-scaffold.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    console.error('[dev-download] archiver error:', err);
+  });
+
+  archive.pipe(res);
+
+  for (const file of files) {
+    if (file.path && file.content != null) {
+      archive.append(file.content, { name: file.path });
+    }
+  }
+
+  archive.finalize();
+});
+
 // GET /pipeline/:id  — full run details (for dashboard initial load)
 router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
@@ -304,13 +365,13 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 function getNextPhase(phase: string): string | null {
-  const order = ['requirements', 'design', 'qa'];
+  const order = ['requirements', 'design', 'qa', 'dev'];
   const idx = order.indexOf(phase);
   return idx >= 0 && idx < order.length - 1 ? order[idx + 1] : null;
 }
 
 function getPreviousPhase(phase: string): string | null {
-  const order = ['requirements', 'design', 'qa'];
+  const order = ['requirements', 'design', 'qa', 'dev'];
   const idx = order.indexOf(phase);
   return idx > 0 ? order[idx - 1] : null;
 }
