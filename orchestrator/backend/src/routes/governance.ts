@@ -57,6 +57,30 @@ const FILES = [
     file: 'agents/qa/backend/src/prompts/qa-agent.txt',
   },
   {
+    id: 'dev-claude',
+    title: 'Development Agent CLAUDE.md',
+    category: 'governance',
+    file: 'agents/dev/CLAUDE.md',
+  },
+  {
+    id: 'deploy-claude',
+    title: 'Deployment Agent CLAUDE.md',
+    category: 'governance',
+    file: 'agents/deploy/CLAUDE.md',
+  },
+  {
+    id: 'dev-prompt',
+    title: 'Development Agent — System Prompt',
+    category: 'system_prompt',
+    file: 'agents/dev/backend/src/prompts/dev-agent.txt',
+  },
+  {
+    id: 'deploy-prompt',
+    title: 'Deployment Agent — System Prompt',
+    category: 'system_prompt',
+    file: 'agents/deploy/backend/src/prompts/deploy-agent.txt',
+  },
+  {
     id: 'codeowners',
     title: 'CODEOWNERS',
     category: 'codeowners',

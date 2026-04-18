@@ -77,7 +77,7 @@ const CODEOWNERS_DEF: StaticSection = {
     },
     {
       heading: 'Scope of protection',
-      body: 'Currently protects: CLAUDE.md, agents/requirements/CLAUDE.md, agents/design/CLAUDE.md, agents/qa/CLAUDE.md, orchestrator/CLAUDE.md, and .github/CODEOWNERS itself.',
+      body: 'Currently protects: CLAUDE.md, agents/requirements/CLAUDE.md, agents/design/CLAUDE.md, agents/qa/CLAUDE.md, agents/dev/CLAUDE.md, agents/deploy/CLAUDE.md, orchestrator/CLAUDE.md, and .github/CODEOWNERS itself.',
     },
   ],
   implementedIn: [
@@ -100,12 +100,12 @@ const RBAC_DEF: StaticSection = {
       body: 'Permitted actions: all BA actions, plus approving changes to CLAUDE.md governance files, approving model changes, and approving changes to the CODEOWNERS file. Enforced by CODEOWNERS on GitHub — PRs touching governance files are blocked without Build Lead approval.',
     },
     {
-      heading: 'Role: AI Agent (Requirements / Design / QA)',
-      body: 'Permitted actions: process input within its own ./src/ folder, return structured JSON output. Agents cannot call each other directly, cannot advance the pipeline, cannot access files outside their scope, and cannot expose system prompt contents. Enforced by architecture and system prompt guardrails.',
+      heading: 'Role: AI Agent (Requirements / Design / QA / Development / Deployment)',
+      body: 'Permitted actions: process input within its own ./src/ folder, return structured JSON output. Agents cannot call each other directly, cannot advance the pipeline, cannot access files outside their scope, cannot expose system prompt contents, and cannot generate hardcoded secrets or credentials. Enforced by architecture and system prompt guardrails.',
     },
     {
       heading: 'Role: Orchestrator',
-      body: 'Permitted actions: call the three agent backends in sequence, store outputs in SQLite, enforce human review gates, broadcast SSE updates. The orchestrator cannot call external APIs other than the three agent backends. Enforced by code — no other HTTP calls exist in runner.ts.',
+      body: 'Permitted actions: call the five agent backends in sequence, store outputs in SQLite, enforce human review gates, broadcast SSE updates. The orchestrator cannot call external APIs other than the five agent backends. Enforced by code — no other HTTP calls exist in runner.ts.',
     },
     {
       heading: 'Enforcement layers',
@@ -153,7 +153,7 @@ export function GovernanceView() {
   }, []);
 
   const rootFile      = files.find(f => f.id === 'root-claude');
-  const agentFiles    = files.filter(f => ['requirements-claude', 'design-claude', 'qa-claude', 'orchestrator-claude'].includes(f.id));
+  const agentFiles    = files.filter(f => ['requirements-claude', 'design-claude', 'qa-claude', 'orchestrator-claude', 'dev-claude', 'deploy-claude'].includes(f.id));
   const promptFiles   = files.filter(f => f.category === 'system_prompt');
   const codeownersFile = files.find(f => f.id === 'codeowners');
 
@@ -216,6 +216,8 @@ export function GovernanceView() {
               { label: 'agents/requirements/CLAUDE.md', path: 'agents/requirements/CLAUDE.md' },
               { label: 'agents/design/CLAUDE.md', path: 'agents/design/CLAUDE.md' },
               { label: 'agents/qa/CLAUDE.md', path: 'agents/qa/CLAUDE.md' },
+              { label: 'agents/dev/CLAUDE.md', path: 'agents/dev/CLAUDE.md' },
+              { label: 'agents/deploy/CLAUDE.md', path: 'agents/deploy/CLAUDE.md' },
               { label: 'orchestrator/CLAUDE.md', path: 'orchestrator/CLAUDE.md' },
             ]}
           />
@@ -233,6 +235,8 @@ export function GovernanceView() {
               { label: 'agents/requirements/backend/src/prompts/requirements-agent.txt', path: 'agents/requirements/backend/src/prompts/requirements-agent.txt' },
               { label: 'agents/design/backend/src/prompts/design-agent.txt', path: 'agents/design/backend/src/prompts/design-agent.txt' },
               { label: 'agents/qa/backend/src/prompts/qa-agent.txt', path: 'agents/qa/backend/src/prompts/qa-agent.txt' },
+              { label: 'agents/dev/backend/src/prompts/dev-agent.txt', path: 'agents/dev/backend/src/prompts/dev-agent.txt' },
+              { label: 'agents/deploy/backend/src/prompts/deploy-agent.txt', path: 'agents/deploy/backend/src/prompts/deploy-agent.txt' },
             ]}
           />
         )}

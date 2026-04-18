@@ -18,6 +18,8 @@ agents/requirements/CLAUDE.md @rajkumar611
 orchestrator/CLAUDE.md @rajkumar611
 agents/design/CLAUDE.md @rajkumar611
 agents/qa/CLAUDE.md @rajkumar611
+agents/dev/CLAUDE.md @rajkumar611
+agents/deploy/CLAUDE.md @rajkumar611
 
 # CODEOWNERS itself is also a governance artifact.
 # Protecting it prevents a developer from removing the above rules
