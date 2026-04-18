@@ -80,6 +80,10 @@ export function UploadForm({ onStarted }: Props) {
           <span style={styles.badge}>Design</span>
           <span style={styles.arrow}>→</span>
           <span style={styles.badge}>QA Test Cases</span>
+          <span style={styles.arrow}>→</span>
+          <span style={styles.badge}>Development</span>
+          <span style={styles.arrow}>→</span>
+          <span style={styles.badge}>Deployment</span>
         </div>
       </div>
     </div>

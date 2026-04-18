@@ -19,6 +19,10 @@ interface RunRow {
   design_completed_at: string | null;
   qa_started_at: string | null;
   qa_completed_at: string | null;
+  dev_started_at: string | null;
+  dev_completed_at: string | null;
+  deploy_started_at: string | null;
+  deploy_completed_at: string | null;
   completed_at: string | null;
 }
 
@@ -74,7 +78,7 @@ export function DashboardView({ activeRun, onNavigateToPipeline }: Props) {
         <SummaryCard
           label="Completed Runs"
           value={<span style={s.bigNum}>{loading ? '…' : completedRuns}</span>}
-          sub="Full Requirements → Design → QA cycles approved"
+          sub="Full Requirements → Design → QA → Dev → Deploy cycles approved"
           accent="#2e7d32"
         />
         <SummaryCard
@@ -113,7 +117,7 @@ export function DashboardView({ activeRun, onNavigateToPipeline }: Props) {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {['Run ID', 'File', 'Status', 'Phase', 'Started', 'Req', 'Design', 'QA', 'Total'].map(h => (
+                  {['Run ID', 'File', 'Status', 'Phase', 'Started', 'Req', 'Design', 'QA', 'Dev', 'Deploy', 'Total'].map(h => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
@@ -136,6 +140,12 @@ export function DashboardView({ activeRun, onNavigateToPipeline }: Props) {
                     </td>
                     <td style={{ ...s.td, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12 }}>
                       {formatDuration(r.qa_started_at, r.qa_completed_at)}
+                    </td>
+                    <td style={{ ...s.td, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12 }}>
+                      {formatDuration(r.dev_started_at, r.dev_completed_at)}
+                    </td>
+                    <td style={{ ...s.td, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12 }}>
+                      {formatDuration(r.deploy_started_at, r.deploy_completed_at)}
                     </td>
                     <td style={{ ...s.td, whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>
                       {r.completed_at ? formatDuration(r.created_at, r.completed_at) : <span style={{ color: '#9e9e9e' }}>—</span>}
@@ -206,7 +216,13 @@ function ActionBadge({ action }: { action: string }) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function phaseLabel(phase: string): string {
-  return ({ requirements: 'Requirements', design: 'Design', qa: 'QA' } as Record<string, string>)[phase] ?? phase;
+  return ({
+    requirements: 'Requirements',
+    design: 'Design',
+    qa: 'QA',
+    dev: 'Development',
+    deploy: 'Deployment',
+  } as Record<string, string>)[phase] ?? phase;
 }
 
 function fmt(iso: string): string {
